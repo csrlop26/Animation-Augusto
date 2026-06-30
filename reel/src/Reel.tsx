@@ -27,17 +27,95 @@ const ra = (a: number) => `rgba(201,106,58,${a})`;
 const ca = (a: number) => `rgba(240,239,235,${a})`;
 
 // ── Easing ────────────────────────────────────────────────────────────────────
-const ease = Easing.bezier(0.16, 1, 0.3, 1);
+const expo = Easing.bezier(0.16, 1, 0.3, 1);
+const sharp = Easing.bezier(0.4, 0, 0.6, 1);
 
-function fi(f: number, from: number, to: number, a: number, b: number): number {
+function fi(
+  f: number,
+  from: number,
+  to: number,
+  a: number,
+  b: number,
+  easing = expo
+): number {
   return interpolate(f, [from, to], [a, b], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
-    easing: ease,
+    easing,
   });
 }
 
-// ── Logo SVG (inline — no network dep) ────────────────────────────────────────
+// ── Character-by-character reveal ────────────────────────────────────────────
+function CharReveal({
+  text,
+  f,
+  start,
+  stagger = 2.5,
+  dur = 16,
+  style,
+}: {
+  text: string;
+  f: number;
+  start: number;
+  stagger?: number;
+  dur?: number;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <span style={{ display: "inline-block", ...style }}>
+      {text.split("").map((ch, i) => {
+        const s = start + i * stagger;
+        const op = fi(f, s, s + dur, 0, 1);
+        const y = fi(f, s, s + dur, 28, 0);
+        const blur = fi(f, s, s + dur, 6, 0);
+        return (
+          <span
+            key={i}
+            style={{
+              display: "inline-block",
+              opacity: op,
+              transform: `translateY(${y}px)`,
+              filter: `blur(${blur}px)`,
+              whiteSpace: "pre",
+            }}
+          >
+            {ch}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+// ── Growing line ──────────────────────────────────────────────────────────────
+function Line({
+  f,
+  start,
+  dur = 28,
+  maxW = 936,
+  color = ra(0.4),
+  style,
+}: {
+  f: number;
+  start: number;
+  dur?: number;
+  maxW?: number;
+  color?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      style={{
+        width: fi(f, start, start + dur, 0, maxW),
+        height: 1,
+        background: color,
+        ...style,
+      }}
+    />
+  );
+}
+
+// ── Logo SVG ──────────────────────────────────────────────────────────────────
 const LogoMark: React.FC<{ size?: number; style?: React.CSSProperties }> = ({
   size = 100,
   style,
@@ -49,16 +127,48 @@ const LogoMark: React.FC<{ size?: number; style?: React.CSSProperties }> = ({
     style={style}
     xmlns="http://www.w3.org/2000/svg"
   >
-    {/* Left side — cream */}
-    <polygon points="12,90 48,8 56,8 29,90" fill="#E9E4DC" />
-    {/* Right side — dark charcoal */}
-    <polygon points="36,90 53,8 62,8 80,90" fill="#2C2928" />
-    {/* Crossbar */}
-    <polygon points="24,63 76,63 79,74 21,74" fill="#2C2928" />
+    {/* Left stroke — cream, drawn first (below) */}
+    <polygon points="8,92 37,92 51,9 45,9" fill="#E8E3D8" />
+    {/* Right stroke — dark charcoal, drawn on top */}
+    <polygon points="52,92 84,92 61,9 54,9" fill="#2A2727" />
+    {/* Crossbar — dark, sits over both strokes */}
+    <polygon points="22,60 76,60 78,71 20,71" fill="#2A2727" />
     {/* Orange dot */}
-    <circle cx="77" cy="19" r="9.5" fill="#C96A3A" />
+    <circle cx="79" cy="21" r="9" fill="#C96A3A" />
   </svg>
 );
+
+// ── Corner bracket (construction marker) ─────────────────────────────────────
+function CornerBracket({
+  size = 18,
+  flipX = false,
+  flipY = false,
+  color = RUST,
+  style,
+}: {
+  size?: number;
+  flipX?: boolean;
+  flipY?: boolean;
+  color?: string;
+  style?: React.CSSProperties;
+}) {
+  const path = !flipX && !flipY
+    ? `M0,${size} L0,0 L${size},0`
+    : flipX && !flipY
+    ? `M${size},${size} L${size},0 L0,0`
+    : !flipX && flipY
+    ? `M0,0 L0,${size} L${size},${size}`
+    : `M${size},0 L${size},${size} L0,${size}`;
+  return (
+    <svg
+      width={size}
+      height={size}
+      style={{ position: "absolute", ...style }}
+    >
+      <path d={path} stroke={color} strokeWidth="1.5" fill="none" />
+    </svg>
+  );
+}
 
 // ── Global overlays ───────────────────────────────────────────────────────────
 const GrainOverlay: React.FC = () => {
@@ -70,7 +180,7 @@ const GrainOverlay: React.FC = () => {
         zIndex: 300,
         pointerEvents: "none",
         mixBlendMode: "overlay",
-        opacity: 0.042,
+        opacity: 0.04,
       }}
     >
       <svg width="1080" height="1920" style={{ position: "absolute" }}>
@@ -104,38 +214,7 @@ const Vignette: React.FC = () => (
       zIndex: 250,
       pointerEvents: "none",
       background:
-        "radial-gradient(ellipse 80% 70% at 50% 50%, transparent 30%, rgba(0,0,0,0.65) 100%)",
-    }}
-  />
-);
-
-// ── Ambient glow helper ───────────────────────────────────────────────────────
-const AmbientGlow: React.FC<{
-  intensity: number;
-  color?: string;
-  size?: number;
-  top?: string;
-  left?: string;
-}> = ({
-  intensity,
-  color = ra(0.18),
-  size = 700,
-  top = "50%",
-  left = "50%",
-}) => (
-  <div
-    style={{
-      position: "absolute",
-      width: size,
-      height: size,
-      borderRadius: "50%",
-      background: `radial-gradient(circle, ${color} 0%, transparent 70%)`,
-      filter: "blur(80px)",
-      top,
-      left,
-      transform: "translate(-50%, -50%)",
-      opacity: intensity,
-      pointerEvents: "none",
+        "radial-gradient(ellipse 80% 70% at 50% 50%, transparent 28%, rgba(0,0,0,0.68) 100%)",
     }}
   />
 );
@@ -143,64 +222,163 @@ const AmbientGlow: React.FC<{
 // ── Scene 1: INTRO ────────────────────────────────────────────────────────────
 const SceneIntro: React.FC = () => {
   const f = useCurrentFrame();
-  const glowIn = fi(f, 0, 60, 0, 1);
-  const logoIn = fi(f, 15, 55, 0, 1);
-  const logoScale = fi(f, 15, 55, 0.88, 1);
-  const subIn = fi(f, 40, 68, 0, 1);
+
+  // Line draws out from centre
+  const lineW = fi(f, 5, 40, 0, 420);
+  const lineOp = fi(f, 5, 15, 0, 1);
+
+  // Logo builds: left stroke, right stroke, crossbar, dot — staggered
+  const leftOp = fi(f, 20, 42, 0, 1);
+  const leftX = fi(f, 20, 42, -24, 0);
+  const rightOp = fi(f, 28, 50, 0, 1);
+  const rightX = fi(f, 28, 50, 24, 0);
+  const crossOp = fi(f, 36, 52, 0, 1);
+  const dotOp = fi(f, 44, 60, 0, 1);
+  const dotScale = fi(f, 44, 60, 0, 1);
+
+  const nameOp = fi(f, 52, 72, 0, 1);
+  const subOp = fi(f, 62, 75, 0, 1);
+
+  // Ambient glow
+  const glow = fi(f, 0, 75, 0, 1);
+  const glowPulse = 0.8 + Math.sin((f / 40) * Math.PI * 2) * 0.14;
 
   return (
     <AbsoluteFill
       style={{ background: BG, alignItems: "center", justifyContent: "center" }}
     >
-      <AmbientGlow intensity={glowIn * 0.9} size={700} />
-      {/* Secondary warmer glow */}
+      {/* Ambient radial glow */}
       <div
         style={{
           position: "absolute",
-          width: 300,
-          height: 300,
+          width: 700,
+          height: 700,
           borderRadius: "50%",
-          background: `radial-gradient(circle, ${ra(0.25 * glowIn)} 0%, transparent 70%)`,
-          filter: "blur(40px)",
+          background: `radial-gradient(circle, ${ra(0.18 * glow * glowPulse)} 0%, transparent 65%)`,
+          filter: "blur(90px)",
           top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
+          pointerEvents: "none",
         }}
       />
+
+      {/* Horizontal rule from centre */}
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%) translateY(-90px)",
+          opacity: lineOp,
+          display: "flex",
+        }}
+      >
+        <div
+          style={{
+            width: lineW,
+            height: 1,
+            background: `linear-gradient(to right, ${ra(0.6)}, ${ra(0.15)})`,
+            transform: "scaleX(-1)",
+          }}
+        />
+        <div
+          style={{
+            width: lineW,
+            height: 1,
+            background: `linear-gradient(to right, ${ra(0.6)}, ${ra(0.15)})`,
+          }}
+        />
+      </div>
+
+      {/* Logo assembled piece by piece */}
       <div
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 28,
-          opacity: logoIn,
-          transform: `scale(${logoScale})`,
+          gap: 26,
         }}
       >
-        <LogoMark size={148} />
+        <div style={{ position: "relative", width: 140, height: 140 }}>
+          {/* Clip left half */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              opacity: leftOp,
+              transform: `translateX(${leftX}px)`,
+              clipPath: "inset(0 50% 0 0)",
+            }}
+          >
+            <LogoMark size={140} />
+          </div>
+          {/* Clip right half (includes dot) */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              opacity: rightOp,
+              transform: `translateX(${rightX}px)`,
+              clipPath: "inset(0 0 0 50%)",
+            }}
+          >
+            <LogoMark size={140} />
+          </div>
+          {/* Crossbar mid reveal */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              opacity: crossOp,
+              clipPath: "inset(55% 0 28% 0)",
+            }}
+          >
+            <LogoMark size={140} />
+          </div>
+          {/* Dot pop */}
+          <div
+            style={{
+              position: "absolute",
+              right: 6,
+              top: 14,
+              width: 26,
+              height: 26,
+              borderRadius: "50%",
+              background: RUST,
+              opacity: dotOp,
+              transform: `scale(${dotScale})`,
+              boxShadow: `0 0 20px 6px ${ra(0.5 * dotOp)}`,
+            }}
+          />
+        </div>
+
+        {/* AugustoCS — char by char */}
         <div
           style={{
             fontFamily: "'InterVar', Inter, sans-serif",
-            fontSize: 18,
+            fontSize: 19,
             fontWeight: 300,
             color: ca(0.55),
-            letterSpacing: "0.5em",
+            letterSpacing: "0.48em",
             textTransform: "uppercase",
+            opacity: nameOp,
           }}
         >
           AugustoCS
         </div>
       </div>
+
       <div
         style={{
           position: "absolute",
-          bottom: 170,
-          opacity: subIn,
+          bottom: 168,
+          opacity: subOp,
           fontFamily: "'InterVar', Inter, sans-serif",
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: 300,
           color: ca(0.28),
-          letterSpacing: "0.25em",
+          letterSpacing: "0.28em",
           textTransform: "uppercase",
         }}
       >
@@ -214,15 +392,8 @@ const SceneIntro: React.FC = () => {
 const SceneHook: React.FC = () => {
   const f = useCurrentFrame();
 
-  const line1Op = fi(f, 0, 24, 0, 1);
-  const line1Y = fi(f, 0, 24, 48, 0);
-  const line1Blur = fi(f, 0, 24, 10, 0);
-
-  const line2Op = fi(f, 18, 42, 0, 1);
-  const line2Y = fi(f, 18, 42, 48, 0);
-  const line2Blur = fi(f, 18, 42, 10, 0);
-
-  const tagOp = fi(f, 55, 80, 0, 1);
+  // Underline for "que vende."
+  const underlineW = fi(f, 75, 100, 0, 468);
 
   return (
     <AbsoluteFill
@@ -232,56 +403,75 @@ const SceneHook: React.FC = () => {
         style={{
           position: "absolute",
           inset: 0,
-          background: `radial-gradient(ellipse 90% 60% at 0% 60%, ${ra(0.1)} 0%, transparent 65%)`,
+          background: `radial-gradient(ellipse 80% 55% at 0% 55%, ${ra(0.09)} 0%, transparent 60%)`,
+          pointerEvents: "none",
         }}
       />
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+
+      {/* Top rule */}
+      <Line f={f} start={0} dur={22} maxW={936} style={{ position: "absolute", top: 180, left: 72 }} />
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {/* Line 1 */}
         <div
           style={{
-            opacity: line1Op,
-            transform: `translateY(${line1Y}px)`,
-            filter: `blur(${line1Blur}px)`,
             fontFamily: "'InterVar', Inter, sans-serif",
-            fontSize: 112,
+            fontSize: 108,
             fontWeight: 800,
             color: CREAM,
             lineHeight: 1.0,
             letterSpacing: "-0.04em",
+            display: "block",
           }}
         >
-          Diseño web
+          <CharReveal text="Diseño web" f={f} start={8} stagger={2.5} dur={18} />
         </div>
+
+        {/* Line 2 + underline */}
+        <div style={{ position: "relative" }}>
+          <div
+            style={{
+              fontFamily: "'InterVar', Inter, sans-serif",
+              fontSize: 108,
+              fontWeight: 800,
+              color: RUST,
+              lineHeight: 1.0,
+              letterSpacing: "-0.04em",
+            }}
+          >
+            <CharReveal text="que vende." f={f} start={32} stagger={2.5} dur={18} />
+          </div>
+          {/* Underline draws */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: -6,
+              left: 0,
+              width: underlineW,
+              height: 2,
+              background: RUST,
+              opacity: 0.6,
+            }}
+          />
+        </div>
+
+        {/* Tagline */}
         <div
           style={{
-            opacity: line2Op,
-            transform: `translateY(${line2Y}px)`,
-            filter: `blur(${line2Blur}px)`,
-            fontFamily: "'InterVar', Inter, sans-serif",
-            fontSize: 112,
-            fontWeight: 800,
-            color: RUST,
-            lineHeight: 1.0,
-            letterSpacing: "-0.04em",
-          }}
-        >
-          que vende.
-        </div>
-        <div
-          style={{
-            opacity: tagOp,
-            marginTop: 36,
+            marginTop: 40,
+            opacity: fi(f, 80, 100, 0, 1),
             display: "flex",
             alignItems: "center",
             gap: 14,
           }}
         >
-          <div style={{ width: 30, height: 1, background: ra(0.5) }} />
+          <div style={{ width: 28, height: 1, background: ra(0.5) }} />
           <div
             style={{
               fontFamily: "'InterVar', Inter, sans-serif",
               fontSize: 13,
               fontWeight: 300,
-              color: ca(0.45),
+              color: ca(0.42),
               letterSpacing: "0.22em",
               textTransform: "uppercase",
             }}
@@ -290,151 +480,283 @@ const SceneHook: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Bottom rule */}
+      <Line
+        f={f}
+        start={60}
+        dur={28}
+        maxW={936}
+        style={{ position: "absolute", bottom: 180, left: 72 }}
+      />
     </AbsoluteFill>
   );
 };
 
-// ── Phone Mockup ──────────────────────────────────────────────────────────────
-interface MockupProps {
+// ── Device scene shared ────────────────────────────────────────────────────────
+interface DeviceProps {
   imgSrc: string;
   clientName: string;
   projectType: string;
+  url: string;
   totalFrames: number;
+  // Camera: where it starts, where it settles, orbit amplitude
+  initRotY: number;
+  settleRotY: number;
+  initRotX: number;
+  settleRotX: number;
+  orbitY?: number;
+  orbitX?: number;
+  orbitPeriod?: number;
+  layout: "phone" | "laptop";
+  entryFrom?: "bottom" | "top" | "left" | "right";
 }
 
-const ScenePhone: React.FC<MockupProps> = ({
+const DeviceScene: React.FC<DeviceProps> = ({
   imgSrc,
   clientName,
   projectType,
+  url,
   totalFrames,
+  initRotY,
+  settleRotY,
+  initRotX,
+  settleRotX,
+  orbitY = 5,
+  orbitX = 2,
+  orbitPeriod = 140,
+  layout,
+  entryFrom = "bottom",
 }) => {
   const f = useCurrentFrame();
 
-  const entryP = fi(f, 0, 75, 0, 1);
-  const glow = fi(f, 30, 90, 0, 1);
-  const glowPulse = 0.75 + Math.sin((f / 45) * Math.PI * 2) * 0.14;
+  const ENTRY = 70;
+  const entryP = fi(f, 0, ENTRY, 0, 1);
+  const postEntry = Math.max(0, f - ENTRY);
 
-  // Float
-  const floatY = noise2D("phoneY" + imgSrc, f / 80, 0) * 12 * fi(f, 75, 95, 0, 1);
-  const floatX = noise2D("phoneX" + imgSrc, f / 95, 0) * 6 * fi(f, 75, 95, 0, 1);
+  // Camera: entry animation then continuous gentle orbit
+  const rotY =
+    fi(f, 0, ENTRY, initRotY, settleRotY) +
+    Math.sin((postEntry / orbitPeriod) * Math.PI * 2) * orbitY;
+  const rotX =
+    fi(f, 0, ENTRY, initRotX, settleRotX) +
+    Math.cos((postEntry / (orbitPeriod * 1.3)) * Math.PI * 2) * orbitX;
 
-  // 3D entry tilt
-  const rotY = fi(f, 0, 75, -22, -7);
-  const rotX = fi(f, 0, 75, 6, 2);
-  const entryY = fi(f, 0, 60, 200, 0);
-  const deviceOp = fi(f, 0, 45, 0, 1);
+  // Entry translation
+  const ex =
+    entryFrom === "left"
+      ? fi(f, 0, ENTRY, -250, 0)
+      : entryFrom === "right"
+      ? fi(f, 0, ENTRY, 250, 0)
+      : 0;
+  const ey =
+    entryFrom === "bottom"
+      ? fi(f, 0, ENTRY, 200, 0)
+      : entryFrom === "top"
+      ? fi(f, 0, ENTRY, -200, 0)
+      : 0;
 
-  // Slow image pan
-  const scrollPos = fi(f, 60, totalFrames, 0, 28);
+  // Organic float (post-entry)
+  const floatY = noise2D("fy" + imgSrc, f / 85, 0) * 10 * fi(f, ENTRY, ENTRY + 20, 0, 1);
+  const floatX = noise2D("fx" + imgSrc, f / 100, 0) * 5 * fi(f, ENTRY, ENTRY + 20, 0, 1);
 
-  const labelOp = fi(f, 80, 100, 0, 1);
-  const labelY = fi(f, 80, 100, 18, 0);
+  // Glow intensity
+  const glowBase = fi(f, 0, ENTRY + 20, 0, 1);
+  const glowPulse = 0.78 + Math.sin((f / 55) * Math.PI * 2) * 0.14;
+  const glow = glowBase * glowPulse;
 
-  const W = 390;
-  const H = 840;
-  const R = 52;
+  // Light sweep across device (once, during entry)
+  const sweep = fi(f, 25, 90, -25, 130, sharp);
+
+  // Image slow pan
+  const scrollPos = fi(f, ENTRY, totalFrames - 10, 0, 25);
+
+  // Label
+  const labelOp = fi(f, ENTRY + 10, ENTRY + 30, 0, 1);
+  const labelY = fi(f, ENTRY + 10, ENTRY + 30, 16, 0);
+
+  // Corner brackets
+  const bracketOp = fi(f, ENTRY + 5, ENTRY + 25, 0, 1);
+
+  // Device dimensions
+  const W = layout === "phone" ? 390 : 840;
+  const H = layout === "phone" ? 840 : 520;
+  const R = layout === "phone" ? 50 : 14;
+
+  const deviceOp = fi(f, 0, 40, 0, 1);
 
   return (
     <AbsoluteFill
       style={{ background: BG, alignItems: "center", justifyContent: "center" }}
     >
-      <AmbientGlow
-        intensity={glow * glowPulse * 0.85}
-        size={750}
-        color={ra(0.2)}
+      {/* Background glow */}
+      <div
+        style={{
+          position: "absolute",
+          width: 800,
+          height: 800,
+          borderRadius: "50%",
+          background: `radial-gradient(circle, ${ra(0.18 * glow)} 0%, transparent 65%)`,
+          filter: "blur(90px)",
+          top: layout === "phone" ? "42%" : "46%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          pointerEvents: "none",
+        }}
       />
 
-      {/* Phone */}
+      {/* Device mockup */}
       <div
         style={{
           opacity: deviceOp,
-          transform: `translateY(${entryY + floatY}px) translateX(${floatX}px) perspective(1400px) rotateY(${rotY}deg) rotateX(${rotX}deg)`,
+          transform: `translate(${ex + floatX}px, ${ey + floatY}px) perspective(1500px) rotateY(${rotY}deg) rotateX(${rotX}deg)`,
           transformOrigin: "center center",
-          marginBottom: 120,
+          marginBottom: layout === "phone" ? 130 : 160,
+          position: "relative",
           width: W,
           height: H,
-          borderRadius: R,
-          background: "#0C0C0C",
-          border: "1.5px solid rgba(255,255,255,0.07)",
-          boxShadow: `
-            0 0 0 1px ${ra(0.45 * glow * glowPulse)},
-            0 0 25px 6px ${ra(0.28 * glow * glowPulse)},
-            0 0 70px 20px ${ra(0.14 * glow * glowPulse)},
-            0 0 140px 50px ${ra(0.06 * glow * glowPulse)},
-            0 50px 120px 30px rgba(0,0,0,0.95)
-          `,
-          overflow: "hidden",
-          position: "relative",
           flexShrink: 0,
         }}
       >
-        {/* Dynamic Island */}
-        <div
-          style={{
-            position: "absolute",
-            top: 14,
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: 116,
-            height: 34,
-            background: "#050505",
-            borderRadius: 17,
-            zIndex: 10,
-          }}
+        {/* Corner construction brackets */}
+        <CornerBracket
+          style={{ top: -12, left: -12, opacity: bracketOp }}
         />
-        {/* Screenshot */}
-        <Img
-          src={staticFile(imgSrc)}
+        <CornerBracket
+          flipX
+          style={{ top: -12, right: -12, opacity: bracketOp }}
+        />
+        <CornerBracket
+          flipY
+          style={{ bottom: -12, left: -12, opacity: bracketOp }}
+        />
+        <CornerBracket
+          flipX
+          flipY
+          style={{ bottom: -12, right: -12, opacity: bracketOp }}
+        />
+
+        {/* Device frame */}
+        <div
           style={{
             width: "100%",
             height: "100%",
-            objectFit: "cover",
-            objectPosition: `center ${scrollPos}%`,
-            display: "block",
-          }}
-        />
-        {/* Glass shine */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 20,
-            pointerEvents: "none",
             borderRadius: R,
-            background:
-              "linear-gradient(145deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 25%, transparent 50%)",
+            background: "#0B0B0B",
+            border: "1.5px solid rgba(255,255,255,0.06)",
+            boxShadow: `
+              0 0 0 1px ${ra(0.5 * glow)},
+              0 0 24px 5px ${ra(0.3 * glow)},
+              0 0 65px 18px ${ra(0.14 * glow)},
+              0 0 130px 45px ${ra(0.06 * glow)},
+              0 60px 130px 40px rgba(0,0,0,0.95)
+            `,
+            overflow: "hidden",
+            position: "relative",
           }}
-        />
-        {/* Inner amber rim */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 19,
-            pointerEvents: "none",
-            borderRadius: R,
-            boxShadow: `inset 0 0 24px 4px ${ra(0.18 * glow)}`,
-          }}
-        />
+        >
+          {/* Dynamic island / camera dot */}
+          {layout === "phone" && (
+            <div
+              style={{
+                position: "absolute",
+                top: 14,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 120,
+                height: 34,
+                background: "#040404",
+                borderRadius: 17,
+                zIndex: 15,
+              }}
+            />
+          )}
+          {layout === "laptop" && (
+            <div
+              style={{
+                position: "absolute",
+                top: 7,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "#1c1c1c",
+                zIndex: 15,
+              }}
+            />
+          )}
+
+          {/* Screenshot */}
+          <Img
+            src={staticFile(imgSrc)}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              objectPosition: `center ${scrollPos}%`,
+              display: "block",
+            }}
+          />
+
+          {/* Light sweep */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 22,
+              pointerEvents: "none",
+              borderRadius: R,
+              background: `linear-gradient(
+                128deg,
+                transparent ${sweep - 18}%,
+                rgba(255,255,255,0.05) ${sweep - 6}%,
+                rgba(255,255,255,0.18) ${sweep}%,
+                rgba(255,255,255,0.05) ${sweep + 6}%,
+                transparent ${sweep + 18}%
+              )`,
+            }}
+          />
+
+          {/* Glass shine */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 20,
+              pointerEvents: "none",
+              borderRadius: R,
+              background:
+                "linear-gradient(148deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.025) 20%, transparent 42%)",
+            }}
+          />
+
+          {/* Inner amber rim */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 19,
+              pointerEvents: "none",
+              borderRadius: R,
+              boxShadow: `inset 0 0 28px 5px ${ra(0.2 * glowBase)}`,
+            }}
+          />
+        </div>
       </div>
 
       {/* Label */}
       <div
         style={{
           position: "absolute",
-          bottom: 140,
+          bottom: 128,
           left: 72,
           opacity: labelOp,
           transform: `translateY(${labelY}px)`,
         }}
       >
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginBottom: 10,
-          }}
+          style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}
         >
           <div style={{ width: 28, height: 1, background: RUST }} />
           <div
@@ -443,7 +765,7 @@ const ScenePhone: React.FC<MockupProps> = ({
               fontSize: 11,
               fontWeight: 500,
               color: RUST,
-              letterSpacing: "0.3em",
+              letterSpacing: "0.32em",
               textTransform: "uppercase",
             }}
           >
@@ -453,7 +775,7 @@ const ScenePhone: React.FC<MockupProps> = ({
         <div
           style={{
             fontFamily: "'InterVar', Inter, sans-serif",
-            fontSize: 38,
+            fontSize: 36,
             fontWeight: 700,
             color: CREAM,
             letterSpacing: "-0.025em",
@@ -462,168 +784,17 @@ const ScenePhone: React.FC<MockupProps> = ({
         >
           {clientName}
         </div>
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-// ── Laptop Mockup ─────────────────────────────────────────────────────────────
-const SceneLaptop: React.FC<MockupProps> = ({
-  imgSrc,
-  clientName,
-  projectType,
-  totalFrames,
-}) => {
-  const f = useCurrentFrame();
-
-  const entryP = fi(f, 0, 75, 0, 1);
-  const glow = fi(f, 30, 90, 0, 1);
-  const glowPulse = 0.78 + Math.sin((f / 50) * Math.PI * 2) * 0.13;
-
-  const floatY = noise2D("lapY" + imgSrc, f / 85, 0) * 10 * fi(f, 75, 95, 0, 1);
-
-  const rotX = fi(f, 0, 75, 8, 2);
-  const rotY = fi(f, 0, 75, 12, 4);
-  const entryY = fi(f, 0, 60, -180, 0);
-  const deviceOp = fi(f, 0, 45, 0, 1);
-
-  const scrollPos = fi(f, 60, totalFrames, 0, 22);
-
-  const labelOp = fi(f, 80, 100, 0, 1);
-  const labelY = fi(f, 80, 100, 18, 0);
-
-  const W = 860;
-  const H = 530;
-  const R = 14;
-
-  return (
-    <AbsoluteFill
-      style={{ background: BG, alignItems: "center", justifyContent: "center" }}
-    >
-      <AmbientGlow
-        intensity={glow * glowPulse * 0.8}
-        size={900}
-        color={ra(0.18)}
-        top="45%"
-      />
-
-      {/* Laptop screen */}
-      <div
-        style={{
-          opacity: deviceOp,
-          transform: `translateY(${entryY + floatY}px) perspective(1600px) rotateX(${rotX}deg) rotateY(${rotY}deg)`,
-          transformOrigin: "center center",
-          marginBottom: 180,
-          width: W,
-          height: H,
-          borderRadius: R,
-          background: "#0A0A0A",
-          border: "1.5px solid rgba(255,255,255,0.06)",
-          boxShadow: `
-            0 0 0 1px ${ra(0.4 * glow * glowPulse)},
-            0 0 28px 7px ${ra(0.25 * glow * glowPulse)},
-            0 0 80px 25px ${ra(0.12 * glow * glowPulse)},
-            0 0 160px 60px ${ra(0.05 * glow * glowPulse)},
-            0 60px 140px 40px rgba(0,0,0,0.95)
-          `,
-          overflow: "hidden",
-          position: "relative",
-          flexShrink: 0,
-        }}
-      >
-        {/* Camera notch */}
         <div
           style={{
-            position: "absolute",
-            top: 6,
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: "#1a1a1a",
-            zIndex: 10,
-          }}
-        />
-        {/* Screenshot */}
-        <Img
-          src={staticFile(imgSrc)}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            objectPosition: `center ${scrollPos}%`,
-            display: "block",
-          }}
-        />
-        {/* Glass shine */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 20,
-            pointerEvents: "none",
-            borderRadius: R,
-            background:
-              "linear-gradient(140deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 20%, transparent 45%)",
-          }}
-        />
-        {/* Inner amber rim */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 19,
-            pointerEvents: "none",
-            borderRadius: R,
-            boxShadow: `inset 0 0 30px 6px ${ra(0.16 * glow)}`,
-          }}
-        />
-      </div>
-
-      {/* Label */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 130,
-          left: 72,
-          opacity: labelOp,
-          transform: `translateY(${labelY}px)`,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginBottom: 10,
-          }}
-        >
-          <div style={{ width: 28, height: 1, background: RUST }} />
-          <div
-            style={{
-              fontFamily: "'InterVar', Inter, sans-serif",
-              fontSize: 11,
-              fontWeight: 500,
-              color: RUST,
-              letterSpacing: "0.3em",
-              textTransform: "uppercase",
-            }}
-          >
-            {projectType}
-          </div>
-        </div>
-        <div
-          style={{
+            marginTop: 6,
             fontFamily: "'InterVar', Inter, sans-serif",
-            fontSize: 38,
-            fontWeight: 700,
-            color: CREAM,
-            letterSpacing: "-0.025em",
-            lineHeight: 1.1,
+            fontSize: 13,
+            fontWeight: 300,
+            color: ca(0.32),
+            letterSpacing: "0.04em",
           }}
         >
-          {clientName}
+          {url}
         </div>
       </div>
     </AbsoluteFill>
@@ -634,16 +805,20 @@ const SceneLaptop: React.FC<MockupProps> = ({
 const SceneTicker: React.FC = () => {
   const f = useCurrentFrame();
 
-  const count = Math.round(fi(f, 0, 55, 0, 7));
-  const countOp = fi(f, 0, 25, 0, 1);
-  const countBlur = fi(f, 0, 25, 12, 0);
+  const countTarget = 7;
+  const count = Math.round(fi(f, 0, 55, 0, countTarget));
+  const countOp = fi(f, 0, 20, 0, 1);
+  const countBlur = fi(f, 0, 20, 16, 0);
+  const countScale = fi(f, 0, 20, 0.85, 1);
 
-  const lineOp = fi(f, 40, 60, 0, 1);
+  const lineOp = fi(f, 40, 58, 0, 1);
+  const tickerOp = fi(f, 48, 65, 0, 1);
 
-  const tickerX = fi(f, 0, 90, 120, -2400);
+  // Ticker scrolls left
+  const tickerX = fi(f, 0, 90, 100, -2800);
 
   const TICKER =
-    "Robot Energy · Madre Superiora · La Trattoria · AutoTietz · Nova · Odentrics · La Piccoleta · B2Tech · Robot Energy · Madre Superiora · La Trattoria · AutoTietz · ";
+    "Robot Energy  ·  Madre Superiora  ·  La Trattoria  ·  AutoTietz  ·  Nova  ·  Odentrics  ·  La Piccoleta  ·  B2Tech  ·  Robot Energy  ·  Madre Superiora  ·  La Trattoria  ·  ";
 
   return (
     <AbsoluteFill
@@ -653,25 +828,27 @@ const SceneTicker: React.FC = () => {
         style={{
           position: "absolute",
           inset: 0,
-          background: `radial-gradient(ellipse 80% 50% at 50% 45%, ${ra(0.1)} 0%, transparent 65%)`,
+          background: `radial-gradient(ellipse 75% 50% at 50% 42%, ${ra(0.1)} 0%, transparent 60%)`,
+          pointerEvents: "none",
         }}
       />
 
-      {/* Number */}
+      {/* Counter */}
       <div
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 14,
+          gap: 12,
           opacity: countOp,
           filter: `blur(${countBlur}px)`,
+          transform: `scale(${countScale})`,
         }}
       >
         <div
           style={{
             fontFamily: "'InterVar', Inter, sans-serif",
-            fontSize: 220,
+            fontSize: 210,
             fontWeight: 800,
             color: CREAM,
             lineHeight: 1,
@@ -685,8 +862,8 @@ const SceneTicker: React.FC = () => {
             fontFamily: "'InterVar', Inter, sans-serif",
             fontSize: 18,
             fontWeight: 300,
-            color: ca(0.4),
-            letterSpacing: "0.35em",
+            color: ca(0.38),
+            letterSpacing: "0.38em",
             textTransform: "uppercase",
           }}
         >
@@ -698,12 +875,12 @@ const SceneTicker: React.FC = () => {
       <div
         style={{
           position: "absolute",
-          bottom: 210,
+          bottom: 218,
           left: 0,
           right: 0,
           height: 1,
           opacity: lineOp,
-          background: `linear-gradient(to right, transparent 0%, ${ra(0.35)} 30%, ${ra(0.35)} 70%, transparent 100%)`,
+          background: `linear-gradient(to right, transparent 5%, ${ra(0.3)} 30%, ${ra(0.3)} 70%, transparent 95%)`,
         }}
       />
 
@@ -711,11 +888,11 @@ const SceneTicker: React.FC = () => {
       <div
         style={{
           position: "absolute",
-          bottom: 140,
+          bottom: 144,
           left: 0,
           right: 0,
           overflow: "hidden",
-          opacity: lineOp,
+          opacity: tickerOp,
         }}
       >
         <div
@@ -724,10 +901,10 @@ const SceneTicker: React.FC = () => {
             whiteSpace: "nowrap",
             transform: `translateX(${tickerX}px)`,
             fontFamily: "'InterVar', Inter, sans-serif",
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: 300,
-            color: ca(0.28),
-            letterSpacing: "0.2em",
+            color: ca(0.25),
+            letterSpacing: "0.22em",
             textTransform: "uppercase",
           }}
         >
@@ -742,23 +919,39 @@ const SceneTicker: React.FC = () => {
 const SceneCTA: React.FC = () => {
   const f = useCurrentFrame();
 
-  const logoOp = fi(f, 0, 28, 0, 1);
-  const logoScale = fi(f, 0, 28, 0.88, 1);
-  const nameOp = fi(f, 22, 48, 0, 1);
-  const nameY = fi(f, 22, 48, 20, 0);
-  const subOp = fi(f, 34, 58, 0, 1);
-  const pillOp = fi(f, 50, 72, 0, 1);
-  const glowP = fi(f, 0, 60, 0, 1);
+  const glow = fi(f, 0, 60, 0, 1);
   const glowPulse = 0.82 + Math.sin((f / 38) * Math.PI * 2) * 0.13;
+
+  const logoOp = fi(f, 0, 26, 0, 1);
+  const logoScale = fi(f, 0, 26, 0.85, 1);
+
+  const nameOp = fi(f, 20, 44, 0, 1);
+  const nameY = fi(f, 20, 44, 20, 0);
+
+  const handleOp = fi(f, 32, 54, 0, 1);
+  const pillOp = fi(f, 50, 70, 0, 1);
+
+  const lineOp = fi(f, 10, 30, 0, 1);
+  const lineW = fi(f, 10, 30, 0, 180);
 
   return (
     <AbsoluteFill
       style={{ background: BG, alignItems: "center", justifyContent: "center" }}
     >
-      <AmbientGlow
-        intensity={glowP * glowPulse * 0.95}
-        size={600}
-        color={ra(0.22)}
+      {/* Ambient glow */}
+      <div
+        style={{
+          position: "absolute",
+          width: 580,
+          height: 580,
+          borderRadius: "50%",
+          background: `radial-gradient(circle, ${ra(0.22 * glow * glowPulse)} 0%, transparent 65%)`,
+          filter: "blur(75px)",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          pointerEvents: "none",
+        }}
       />
 
       <div
@@ -766,17 +959,53 @@ const SceneCTA: React.FC = () => {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 28,
+          gap: 24,
         }}
       >
+        {/* Horizontal line before logo */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            opacity: lineOp,
+            marginBottom: 4,
+          }}
+        >
+          <div
+            style={{
+              width: lineW,
+              height: 1,
+              background: `linear-gradient(to right, transparent, ${ra(0.5)})`,
+            }}
+          />
+          <div
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: RUST,
+              boxShadow: `0 0 10px 3px ${ra(0.6)}`,
+            }}
+          />
+          <div
+            style={{
+              width: lineW,
+              height: 1,
+              background: `linear-gradient(to left, transparent, ${ra(0.5)})`,
+            }}
+          />
+        </div>
+
         {/* Logo */}
         <div
           style={{
             opacity: logoOp,
             transform: `scale(${logoScale})`,
+            filter: logoOp < 1 ? `blur(${(1 - logoOp) * 6}px)` : "none",
           }}
         >
-          <LogoMark size={130} />
+          <LogoMark size={128} />
         </div>
 
         {/* Name */}
@@ -785,7 +1014,7 @@ const SceneCTA: React.FC = () => {
             opacity: nameOp,
             transform: `translateY(${nameY}px)`,
             fontFamily: "'InterVar', Inter, sans-serif",
-            fontSize: 32,
+            fontSize: 30,
             fontWeight: 700,
             color: CREAM,
             letterSpacing: "-0.01em",
@@ -797,13 +1026,13 @@ const SceneCTA: React.FC = () => {
         {/* Handle */}
         <div
           style={{
-            opacity: subOp,
+            opacity: handleOp,
+            marginTop: -8,
             fontFamily: "'InterVar', Inter, sans-serif",
-            fontSize: 17,
+            fontSize: 16,
             fontWeight: 300,
             color: RUST,
             letterSpacing: "0.06em",
-            marginTop: -12,
           }}
         >
           @AugustoCS.studio
@@ -813,15 +1042,15 @@ const SceneCTA: React.FC = () => {
         <div
           style={{
             opacity: pillOp,
-            marginTop: 8,
-            padding: "13px 36px",
+            marginTop: 10,
+            padding: "12px 34px",
             border: `1px solid ${ra(0.45)}`,
             borderRadius: 100,
             fontFamily: "'InterVar', Inter, sans-serif",
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 400,
-            color: RUST,
-            letterSpacing: "0.25em",
+            color: ra(0.9),
+            letterSpacing: "0.26em",
             textTransform: "uppercase",
           }}
         >
@@ -832,7 +1061,7 @@ const SceneCTA: React.FC = () => {
   );
 };
 
-// ── Root composition ──────────────────────────────────────────────────────────
+// ── Root ──────────────────────────────────────────────────────────────────────
 export const Reel: React.FC = () => {
   const FADE = 15;
   const t = linearTiming({ durationInFrames: FADE });
@@ -840,58 +1069,88 @@ export const Reel: React.FC = () => {
   return (
     <AbsoluteFill>
       <TransitionSeries>
-        {/* 1 — Intro: 75f */}
+        {/* 1 — Intro 75f */}
         <TransitionSeries.Sequence durationInFrames={75}>
           <SceneIntro />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-        {/* 2 — Hook: 105f */}
+        {/* 2 — Hook 105f */}
         <TransitionSeries.Sequence durationInFrames={105}>
           <SceneHook />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-        {/* 3 — Robot Energy (phone): 180f */}
+        {/* 3 — Robot Energy: phone, enters from bottom-right tilt */}
         <TransitionSeries.Sequence durationInFrames={180}>
-          <ScenePhone
+          <DeviceScene
             imgSrc="projects/robotenergy.webp"
             clientName="Robot Energy"
             projectType="E-commerce Shopify"
+            url="robotenergy.com"
             totalFrames={180}
+            layout="phone"
+            entryFrom="bottom"
+            initRotY={-28}
+            settleRotY={-8}
+            initRotX={8}
+            settleRotX={2}
+            orbitY={5}
+            orbitX={2}
+            orbitPeriod={130}
           />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-        {/* 4 — Madre Superiora (laptop): 165f */}
+        {/* 4 — Madre Superiora: laptop, enters from top-left tilt */}
         <TransitionSeries.Sequence durationInFrames={165}>
-          <SceneLaptop
+          <DeviceScene
             imgSrc="projects/madresuperiora.webp"
             clientName="Madre Superiora"
             projectType="Café de especialidad"
+            url="madresuperioracoffee.com"
             totalFrames={165}
+            layout="laptop"
+            entryFrom="top"
+            initRotY={20}
+            settleRotY={6}
+            initRotX={14}
+            settleRotX={5}
+            orbitY={4}
+            orbitX={3}
+            orbitPeriod={150}
           />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-        {/* 5 — La Trattoria (phone): 150f */}
+        {/* 5 — La Trattoria: phone, enters from right */}
         <TransitionSeries.Sequence durationInFrames={150}>
-          <ScenePhone
+          <DeviceScene
             imgSrc="projects/latrattoria.webp"
             clientName="La Trattoria"
             projectType="Restaurante Italiano"
+            url="latrattoria.augustocs.com"
             totalFrames={150}
+            layout="phone"
+            entryFrom="right"
+            initRotY={24}
+            settleRotY={7}
+            initRotX={-4}
+            settleRotX={-1}
+            orbitY={5}
+            orbitX={2}
+            orbitPeriod={110}
           />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-        {/* 6 — Stats + Ticker: 90f */}
+        {/* 6 — Stats + Ticker 90f */}
         <TransitionSeries.Sequence durationInFrames={90}>
           <SceneTicker />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-        {/* 7 — CTA: 90f */}
+        {/* 7 — CTA 90f */}
         <TransitionSeries.Sequence durationInFrames={90}>
           <SceneCTA />
         </TransitionSeries.Sequence>
