@@ -1,45 +1,32 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-gold: #c9a86c;
-  --color-gold-dim: #c9a86c40;
-  --color-rose: #f0b8c0;
-  --color-rose-dim: #f0b8c030;
-  --color-dark: #080808;
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-instrument);
+
+  --color-ink: #0B0B0B;
   --color-surface: #111111;
+  --color-canvas: #F5F4F0;
+  --color-gold: #B8973E;
+  --color-gold-dim: #B8973E15;
+  --color-text: #EFEFEF;
+  --color-muted: rgba(239,239,239,0.35);
 }
 
-:root {
-  --background: #ffffff;
-  --foreground: #111111;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  background: #0B0B0B;
+  color: #EFEFEF;
+  font-family: var(--font-inter), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-}
-
-/* Glow utilities */
-.glow-gold {
-  box-shadow:
-    0 0 30px 0 #c9a86c30,
-    0 0 80px 0 #c9a86c18,
-    inset 0 0 0 1px #c9a86c25;
-}
-
-.glow-rose {
-  box-shadow:
-    0 0 30px 0 #f0b8c030,
-    0 0 80px 0 #f0b8c018,
-    inset 0 0 0 1px #f0b8c025;
-}
-
-.text-glow-gold {
-  text-shadow: 0 0 40px #c9a86c60;
+  -moz-osx-font-smoothing: grayscale;
 }
