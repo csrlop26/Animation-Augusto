@@ -9,6 +9,7 @@ import { TransitionSeries, linearTiming } from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
 import { loadFont } from "@remotion/fonts";
 import { staticFile } from "remotion";
+import { noise2D } from "@remotion/noise";
 
 loadFont({
   family: "InterVar",
@@ -22,7 +23,6 @@ const INK = "#1A1A1A";
 const GOLD = "#B8973E";
 
 const ease = Easing.bezier(0.16, 1, 0.3, 1);
-const easeIn = Easing.bezier(0.4, 0, 1, 1);
 
 function fi(f: number, from: number, to: number, a: number, b: number): number {
   return interpolate(f, [from, to], [a, b], {
@@ -32,7 +32,6 @@ function fi(f: number, from: number, to: number, a: number, b: number): number {
   });
 }
 
-// Blur + opacity reveal — more cinematic than translate
 function blurReveal(f: number, start: number, dur = 22) {
   return {
     opacity: fi(f, start, start + dur, 0, 1),
@@ -40,10 +39,67 @@ function blurReveal(f: number, start: number, dur = 22) {
   };
 }
 
-// Pulsing glow opacity
 function glowPulse(f: number, base: number, amp: number, period: number) {
   return base + Math.sin((f / period) * Math.PI * 2) * amp;
 }
+
+// Organic float using Perlin noise (more natural than Math.sin)
+function organicFloat(f: number, seedX: string, seedY: string, entryFrame = 80) {
+  const progress = fi(f, entryFrame, entryFrame + 20, 0, 1);
+  return {
+    x: noise2D(seedX, f / 90, 0) * 5 * progress,
+    y: noise2D(seedY, f / 70, 0) * 14 * progress,
+  };
+}
+
+// ── Global overlays ───────────────────────────────────────────
+
+// Film grain: SVG feTurbulence, seed changes every frame = animated grain
+const GrainOverlay: React.FC = () => {
+  const f = useCurrentFrame();
+  const seed = f % 600;
+  return (
+    <AbsoluteFill
+      style={{
+        zIndex: 300,
+        pointerEvents: "none",
+        mixBlendMode: "overlay",
+        opacity: 0.055,
+      }}
+    >
+      <svg width="1080" height="1920" style={{ position: "absolute" }}>
+        <defs>
+          <filter id={`grain-${seed}`} x="0%" y="0%" width="100%" height="100%">
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.72 0.75"
+              numOctaves="4"
+              seed={seed}
+              stitchTiles="stitch"
+            />
+            <feColorMatrix type="saturate" values="0" />
+          </filter>
+        </defs>
+        <rect
+          x="0" y="0" width="1080" height="1920"
+          filter={`url(#grain-${seed})`}
+        />
+      </svg>
+    </AbsoluteFill>
+  );
+};
+
+// Cinematic vignette: dark edges, transparent center
+const Vignette: React.FC = () => (
+  <AbsoluteFill
+    style={{
+      zIndex: 250,
+      pointerEvents: "none",
+      background:
+        "radial-gradient(ellipse 80% 70% at 50% 50%, transparent 40%, rgba(0,0,0,0.38) 100%)",
+    }}
+  />
+);
 
 // ── Scene 1: Intro (90f) ──────────────────────────────────────
 const SceneIntro: React.FC = () => {
@@ -92,14 +148,12 @@ const SceneHook: React.FC = () => {
         flexDirection: "column",
       }}
     >
-      {/* Breathing glow blob */}
       <div
         style={{
           position: "absolute",
           width: 860,
           height: 560,
-          background:
-            "radial-gradient(ellipse, rgba(184,151,62,0.26) 0%, transparent 65%)",
+          background: "radial-gradient(ellipse, rgba(184,151,62,0.26) 0%, transparent 65%)",
           opacity: glowOp,
           filter: "blur(80px)",
           top: "40%",
@@ -107,7 +161,6 @@ const SceneHook: React.FC = () => {
           transform: "translate(-50%, -50%)",
         }}
       />
-
       <div
         style={{
           display: "flex",
@@ -148,7 +201,6 @@ const SceneHook: React.FC = () => {
           que convierte.
         </p>
       </div>
-
       <p
         style={{
           fontFamily: "'InterVar', system-ui",
@@ -171,9 +223,8 @@ const SceneHook: React.FC = () => {
   );
 };
 
-// ── Phone screen with animated content ───────────────────────
+// ── Phone screen — real text content ─────────────────────────
 const PhoneScreen: React.FC<{ f: number }> = ({ f }) => {
-  // Elements animate in relative to scene frame
   const headerStyle = blurReveal(f, 75, 18);
   const heroStyle = { opacity: fi(f, 88, 108, 0, 1), transform: `translateY(${fi(f, 88, 108, 12, 0)}px)` };
   const btnStyle = { opacity: fi(f, 108, 126, 0, 1), transform: `scale(${fi(f, 108, 126, 0.88, 1)})` };
@@ -182,14 +233,14 @@ const PhoneScreen: React.FC<{ f: number }> = ({ f }) => {
   const card3Style = { opacity: fi(f, 142, 160, 0, 1), transform: `translateX(${fi(f, 142, 160, 22, 0)}px)` };
 
   const cards = [
-    { style: card1Style, accent: "#B8973E22", aw: 88 },
-    { style: card2Style, accent: "#0B0B0B0D", aw: 68 },
-    { style: card3Style, accent: "#0B0B0B0D", aw: 78 },
+    { style: card1Style, accent: "#B8973E22", label: "Diseño web", sub: "Landing page" },
+    { style: card2Style, accent: "#0B0B0B0D", label: "E-commerce", sub: "Tienda online" },
+    { style: card3Style, accent: "#0B0B0B0D", label: "Branding", sub: "Identidad visual" },
   ];
 
   return (
     <div style={{ background: "#fff", width: "100%", height: "100%" }}>
-      {/* Nav bar */}
+      {/* Nav */}
       <div
         style={{
           background: "#0B0B0B",
@@ -203,10 +254,14 @@ const PhoneScreen: React.FC<{ f: number }> = ({ f }) => {
           ...headerStyle,
         }}
       >
-        <div style={{ width: 90, height: 14, background: "#B8973E", borderRadius: 3 }} />
+        <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 700, fontSize: 13, color: GOLD, margin: 0, letterSpacing: "0.06em" }}>
+          AugustoCS
+        </p>
         <div style={{ display: "flex", gap: 14 }}>
-          {[44, 36, 44].map((w, i) => (
-            <div key={i} style={{ width: w, height: 9, background: "rgba(255,255,255,0.3)", borderRadius: 3 }} />
+          {["Inicio", "Servicios", "Contacto"].map((label, i) => (
+            <p key={i} style={{ fontFamily: "'InterVar', system-ui", fontSize: 9, color: "rgba(255,255,255,0.42)", margin: 0 }}>
+              {label}
+            </p>
           ))}
         </div>
       </div>
@@ -220,13 +275,35 @@ const PhoneScreen: React.FC<{ f: number }> = ({ f }) => {
           flexDirection: "column",
           justifyContent: "flex-end",
           padding: 24,
-          gap: 10,
+          gap: 0,
           ...heroStyle,
         }}
       >
-        <div style={{ width: 210, height: 20, background: "rgba(255,255,255,0.88)", borderRadius: 4 }} />
-        <div style={{ width: 165, height: 14, background: "rgba(255,255,255,0.38)", borderRadius: 3 }} />
-        <div style={{ ...btnStyle, width: 104, height: 36, background: "#B8973E", borderRadius: 10, marginTop: 6 }} />
+        <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 800, fontSize: 20, color: "rgba(255,255,255,0.95)", margin: 0, lineHeight: 1.15 }}>
+          Tu Negocio Online
+        </p>
+        <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 400, fontSize: 12, color: "rgba(255,255,255,0.48)", margin: "6px 0 0" }}>
+          Diseño web que convierte visitas
+        </p>
+        <div
+          style={{
+            ...btnStyle,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: GOLD,
+            borderRadius: 10,
+            marginTop: 14,
+            paddingLeft: 16,
+            paddingRight: 16,
+            height: 34,
+            width: "fit-content",
+          }}
+        >
+          <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 11, color: "#fff", margin: 0 }}>
+            Empieza hoy →
+          </p>
+        </div>
       </div>
 
       {/* Cards */}
@@ -246,9 +323,13 @@ const PhoneScreen: React.FC<{ f: number }> = ({ f }) => {
             }}
           >
             <div style={{ width: 38, height: 38, borderRadius: 10, background: card.accent, flexShrink: 0 }} />
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
-              <div style={{ width: `${card.aw}%`, height: 10, background: "#1A1A1A28", borderRadius: 3 }} />
-              <div style={{ width: "55%", height: 8, background: "#1A1A1A14", borderRadius: 3 }} />
+            <div style={{ flex: 1 }}>
+              <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 11, color: "#1A1A1A", margin: 0 }}>
+                {card.label}
+              </p>
+              <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 400, fontSize: 9, color: "rgba(26,26,26,0.42)", margin: "3px 0 0" }}>
+                {card.sub}
+              </p>
             </div>
           </div>
         ))}
@@ -268,9 +349,10 @@ const Phone: React.FC<{ f: number }> = ({ f }) => (
       overflow: "hidden",
       position: "relative",
       boxShadow:
-        "0 80px 160px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.07)",
+        "0 80px 160px rgba(0,0,0,0.45), 0 20px 40px rgba(0,0,0,0.2), inset 0 0 0 1px rgba(255,255,255,0.08)",
     }}
   >
+    {/* Dynamic island */}
     <div
       style={{
         position: "absolute",
@@ -284,6 +366,18 @@ const Phone: React.FC<{ f: number }> = ({ f }) => (
         zIndex: 10,
       }}
     />
+    {/* Glass reflection — diagonal highlight, premium device look */}
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 20,
+        pointerEvents: "none",
+        borderRadius: 44,
+        background:
+          "linear-gradient(135deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.04) 30%, transparent 55%)",
+      }}
+    />
     <PhoneScreen f={f} />
   </div>
 );
@@ -291,14 +385,22 @@ const Phone: React.FC<{ f: number }> = ({ f }) => (
 // ── Scene 3: Phone (270f) ─────────────────────────────────────
 const ScenePhone: React.FC = () => {
   const f = useCurrentFrame();
+
+  // Entry animation
   const rotY = fi(f, 0, 80, -24, -6);
   const rotX = fi(f, 0, 80, 10, 2);
   const ty = fi(f, 0, 80, 340, 0);
-  const blurPx = fi(f, 0, 60, 24, 0);
   const sc = fi(f, 0, 80, 0.8, 1);
   const glowOp = glowPulse(f, fi(f, 30, 100, 0, 0.8), 0.06, 80);
   const labelOp = fi(f, 85, 115, 0, 0.65);
-  const floatY = f > 80 ? Math.sin(((f - 80) / 30) * Math.PI) * 12 : 0;
+
+  // Directional motion blur: heavy horizontal during 3D rotation entry
+  const mbX = fi(f, 0, 58, 22, 0);
+  const mbY = fi(f, 0, 58, 3, 0);
+  const mbSeed = `phone-mb-${f}`;
+
+  // Organic Perlin float (replaces Math.sin — irregular, more realistic)
+  const float = organicFloat(f, "ph-fx", "ph-fy", 80);
 
   return (
     <AbsoluteFill
@@ -310,6 +412,15 @@ const ScenePhone: React.FC = () => {
         flexDirection: "column",
       }}
     >
+      {/* SVG directional blur definition */}
+      <svg style={{ position: "absolute", width: 0, height: 0 }}>
+        <defs>
+          <filter id="phone-dir-blur">
+            <feGaussianBlur stdDeviation={`${mbX} ${mbY}`} />
+          </filter>
+        </defs>
+      </svg>
+
       <div
         style={{
           position: "absolute",
@@ -322,8 +433,8 @@ const ScenePhone: React.FC = () => {
       />
       <div
         style={{
-          filter: `blur(${blurPx}px)`,
-          transform: `perspective(1500px) rotateY(${rotY}deg) rotateX(${rotX}deg) translateY(${ty + floatY}px) scale(${sc})`,
+          filter: mbX > 0.4 ? "url(#phone-dir-blur)" : "none",
+          transform: `perspective(1500px) rotateY(${rotY}deg) rotateX(${rotX}deg) translateX(${float.x}px) translateY(${ty + float.y}px) scale(${sc})`,
         }}
       >
         <Phone f={f} />
@@ -346,7 +457,7 @@ const ScenePhone: React.FC = () => {
   );
 };
 
-// ── Browser screen with animated content ─────────────────────
+// ── Browser content — real text ───────────────────────────────
 const BrowserContent: React.FC<{ f: number }> = ({ f }) => {
   const navStyle = { opacity: fi(f, 65, 82, 0, 1) };
   const h1Style = { opacity: fi(f, 78, 96, 0, 1), transform: `translateY(${fi(f, 78, 96, 14, 0)}px)` };
@@ -355,6 +466,12 @@ const BrowserContent: React.FC<{ f: number }> = ({ f }) => {
   const card1Op = fi(f, 112, 128, 0, 1);
   const card2Op = fi(f, 122, 138, 0, 1);
   const card3Op = fi(f, 132, 148, 0, 1);
+
+  const serviceCards = [
+    { op: card1Op, icon: "#B8973E22", title: "Landing", desc: "Convierte" },
+    { op: card2Op, icon: "#ffffff09", title: "E-commerce", desc: "Vende 24/7" },
+    { op: card3Op, icon: "#ffffff09", title: "Branding", desc: "Destaca" },
+  ];
 
   return (
     <>
@@ -367,29 +484,70 @@ const BrowserContent: React.FC<{ f: number }> = ({ f }) => {
           ...navStyle,
         }}
       >
-        <div style={{ width: 110, height: 16, background: "#B8973E", borderRadius: 4 }} />
+        <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 700, fontSize: 17, color: GOLD, margin: 0, letterSpacing: "0.04em" }}>
+          AugustoCS
+        </p>
         <div style={{ display: "flex", gap: 28 }}>
-          {[56, 46, 62, 54].map((w, i) => (
-            <div key={i} style={{ width: w, height: 10, background: "rgba(255,255,255,0.28)", borderRadius: 3 }} />
+          {["Inicio", "Servicios", "Proyectos", "Contacto"].map((label, i) => (
+            <p key={i} style={{ fontFamily: "'InterVar', system-ui", fontSize: 12, color: "rgba(255,255,255,0.3)", margin: 0 }}>
+              {label}
+            </p>
           ))}
         </div>
       </div>
 
       {/* Hero text */}
       <div style={{ paddingTop: 16 }}>
-        <div style={{ width: 440, height: 30, background: "rgba(255,255,255,0.86)", borderRadius: 5, marginBottom: 13, ...h1Style }} />
-        <div style={{ width: 360, height: 20, background: "rgba(255,255,255,0.38)", borderRadius: 4, marginBottom: 9, ...h2Style }} />
-        <div style={{ width: 285, height: 20, background: "rgba(255,255,255,0.22)", borderRadius: 4, marginBottom: 28, ...h2Style }} />
-        <div style={{ width: 148, height: 46, background: "#B8973E", borderRadius: 11, ...btnStyle }} />
+        <p
+          style={{
+            fontFamily: "'InterVar', system-ui",
+            fontWeight: 800,
+            fontSize: 34,
+            color: "rgba(255,255,255,0.95)",
+            margin: 0,
+            lineHeight: 1.1,
+            ...h1Style,
+          }}
+        >
+          Tu web. Tu marca.
+        </p>
+        <p
+          style={{
+            fontFamily: "'InterVar', system-ui",
+            fontWeight: 400,
+            fontSize: 18,
+            color: "rgba(255,255,255,0.44)",
+            margin: "10px 0 0",
+            lineHeight: 1.4,
+            ...h2Style,
+          }}
+        >
+          Diseño profesional que genera
+          <br />resultados reales.
+        </p>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: GOLD,
+            borderRadius: 11,
+            paddingLeft: 28,
+            paddingRight: 28,
+            height: 46,
+            marginTop: 24,
+            ...btnStyle,
+          }}
+        >
+          <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 15, color: "#fff", margin: 0 }}>
+            Quiero mi web →
+          </p>
+        </div>
       </div>
 
-      {/* Cards */}
+      {/* Service cards */}
       <div style={{ display: "flex", gap: 18 }}>
-        {[
-          { op: card1Op, icon: "#B8973E22" },
-          { op: card2Op, icon: "#ffffff09" },
-          { op: card3Op, icon: "#ffffff09" },
-        ].map((card, i) => (
+        {serviceCards.map((card, i) => (
           <div
             key={i}
             style={{
@@ -407,8 +565,12 @@ const BrowserContent: React.FC<{ f: number }> = ({ f }) => {
             }}
           >
             <div style={{ width: 34, height: 34, background: card.icon, borderRadius: 9 }} />
-            <div style={{ width: "68%", height: 8, background: "rgba(255,255,255,0.38)", borderRadius: 3 }} />
-            <div style={{ width: "48%", height: 7, background: "rgba(255,255,255,0.18)", borderRadius: 3 }} />
+            <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 12, color: "rgba(255,255,255,0.7)", margin: 0 }}>
+              {card.title}
+            </p>
+            <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 400, fontSize: 10, color: "rgba(255,255,255,0.28)", margin: 0 }}>
+              {card.desc}
+            </p>
           </div>
         ))}
       </div>
@@ -422,7 +584,8 @@ const Browser: React.FC<{ f: number }> = ({ f }) => (
       width: 840,
       borderRadius: 18,
       overflow: "hidden",
-      boxShadow: "0 70px 150px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.1)",
+      boxShadow:
+        "0 70px 150px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.04)",
     }}
   >
     {/* Chrome bar */}
@@ -434,11 +597,13 @@ const Browser: React.FC<{ f: number }> = ({ f }) => (
         alignItems: "center",
         paddingLeft: 18,
         gap: 8,
+        position: "relative",
       }}
     >
       {["#FF5F56", "#FFBD2E", "#27C93F"].map((c, i) => (
         <div key={i} style={{ width: 13, height: 13, borderRadius: 7, background: c }} />
       ))}
+      {/* Address bar */}
       <div
         style={{
           flex: 1,
@@ -449,9 +614,13 @@ const Browser: React.FC<{ f: number }> = ({ f }) => (
           display: "flex",
           alignItems: "center",
           paddingLeft: 14,
+          gap: 8,
         }}
       >
-        <div style={{ width: 130, height: 8, background: "#3C3C3C", borderRadius: 3 }} />
+        <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#27C93F", opacity: 0.7 }} />
+        <p style={{ fontFamily: "'InterVar', system-ui", fontSize: 11, color: "rgba(255,255,255,0.28)", margin: 0 }}>
+          augustocs.studio
+        </p>
       </div>
     </div>
     {/* Site content */}
@@ -475,11 +644,15 @@ const SceneBrowser: React.FC = () => {
   const f = useCurrentFrame();
   const tx = fi(f, 0, 78, 280, 0);
   const rotY = fi(f, 0, 78, 22, 5);
-  const blurPx = fi(f, 0, 58, 20, 0);
   const sc = fi(f, 0, 78, 0.84, 1);
   const glowOp = glowPulse(f, fi(f, 20, 88, 0, 0.72), 0.06, 85);
   const labelOp = fi(f, 90, 118, 0, 0.6);
-  const floatY = f > 78 ? Math.sin(((f - 78) / 36) * Math.PI) * 10 : 0;
+
+  // Directional motion blur: horizontal sweep from right
+  const mbX = fi(f, 0, 56, 20, 0);
+  const mbY = fi(f, 0, 56, 2, 0);
+
+  const float = organicFloat(f, "br-fx", "br-fy", 78);
 
   return (
     <AbsoluteFill
@@ -491,6 +664,14 @@ const SceneBrowser: React.FC = () => {
         flexDirection: "column",
       }}
     >
+      <svg style={{ position: "absolute", width: 0, height: 0 }}>
+        <defs>
+          <filter id="browser-dir-blur">
+            <feGaussianBlur stdDeviation={`${mbX} ${mbY}`} />
+          </filter>
+        </defs>
+      </svg>
+
       <div
         style={{
           position: "absolute",
@@ -503,8 +684,8 @@ const SceneBrowser: React.FC = () => {
       />
       <div
         style={{
-          filter: `blur(${blurPx}px)`,
-          transform: `perspective(1800px) rotateY(-${rotY}deg) translateX(${tx}px) translateY(${floatY}px) scale(${sc})`,
+          filter: mbX > 0.4 ? "url(#browser-dir-blur)" : "none",
+          transform: `perspective(1800px) rotateY(-${rotY}deg) translateX(${tx + float.x * 2}px) translateY(${float.y}px) scale(${sc})`,
         }}
       >
         <Browser f={f} />
@@ -530,22 +711,22 @@ const SceneBrowser: React.FC = () => {
 const SceneDouble: React.FC = () => {
   const f = useCurrentFrame();
 
-  // Left phone
   const lRotY = fi(f, 0, 80, -30, -10);
   const lTX = fi(f, 0, 80, -260, 0);
   const lBlur = fi(f, 0, 55, 20, 0);
   const lSc = fi(f, 0, 80, 0.82, 1);
-  const lFloat = f > 80 ? Math.sin(((f - 80) / 28) * Math.PI) * 9 : 0;
 
-  // Right browser (smaller)
   const rRotY = fi(f, 0, 80, 30, 8);
   const rTX = fi(f, 0, 80, 260, 0);
   const rBlur = fi(f, 10, 65, 20, 0);
   const rSc = fi(f, 0, 80, 0.82, 1);
-  const rFloat = f > 80 ? Math.sin(((f - 80) / 28 + 0.5) * Math.PI) * 9 : 0;
 
   const glowOp = glowPulse(f, fi(f, 30, 90, 0, 0.7), 0.07, 90);
   const labelOp = fi(f, 90, 118, 0, 0.5);
+
+  // Independent organic floats for each device
+  const lFloat = organicFloat(f, "dl-fx", "dl-fy", 80);
+  const rFloat = organicFloat(f, "dr-fx", "dr-fy", 80);
 
   return (
     <AbsoluteFill
@@ -558,7 +739,6 @@ const SceneDouble: React.FC = () => {
         gap: 0,
       }}
     >
-      {/* Central glow */}
       <div
         style={{
           position: "absolute",
@@ -583,7 +763,7 @@ const SceneDouble: React.FC = () => {
         <div
           style={{
             filter: `blur(${lBlur}px)`,
-            transform: `perspective(1600px) rotateY(${lRotY}deg) translateX(${lTX}px) translateY(${lFloat}px) scale(${lSc})`,
+            transform: `perspective(1600px) rotateY(${lRotY}deg) translateX(${lTX + lFloat.x}px) translateY(${lFloat.y}px) scale(${lSc})`,
             zIndex: 2,
           }}
         >
@@ -602,43 +782,51 @@ const SceneDouble: React.FC = () => {
             <div
               style={{
                 position: "absolute",
-                top: 8,
-                left: "50%",
+                top: 8, left: "50%",
                 transform: "translateX(-50%)",
-                width: 90,
-                height: 28,
+                width: 90, height: 28,
                 background: "#000",
                 borderRadius: 16,
                 zIndex: 10,
               }}
             />
+            {/* Glass reflection */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 20,
+                pointerEvents: "none",
+                borderRadius: 36,
+                background: "linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 45%)",
+              }}
+            />
             <div style={{ background: "#0B0B0B", height: 52, display: "flex", alignItems: "flex-end", padding: "0 18px 10px" }}>
-              <div style={{ width: 68, height: 10, background: "#B8973E", borderRadius: 2 }} />
+              <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 700, fontSize: 11, color: GOLD, margin: 0 }}>AugustoCS</p>
             </div>
-            <div style={{ background: "linear-gradient(165deg, #0f0f0f, #1a1230)", height: 170, padding: 18, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 8 }}>
-              <div style={{ width: "80%", height: 14, background: "rgba(255,255,255,0.85)", borderRadius: 3 }} />
-              <div style={{ width: "60%", height: 10, background: "rgba(255,255,255,0.35)", borderRadius: 3 }} />
-              <div style={{ width: 78, height: 28, background: "#B8973E", borderRadius: 8, marginTop: 4 }} />
+            <div style={{ background: "linear-gradient(165deg, #0f0f0f, #1a1230)", height: 170, padding: 18, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 6 }}>
+              <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 800, fontSize: 15, color: "rgba(255,255,255,0.9)", margin: 0 }}>Tu Negocio Online</p>
+              <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 400, fontSize: 10, color: "rgba(255,255,255,0.4)", margin: 0 }}>Diseño web que convierte</p>
+              <div style={{ width: 78, height: 28, background: GOLD, borderRadius: 8, marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 9, color: "#fff", margin: 0 }}>Empieza →</p>
+              </div>
             </div>
             <div style={{ padding: 12, background: "#fafafa", display: "flex", flexDirection: "column", gap: 10 }}>
-              {[88, 70, 78].map((w, i) => (
+              {["Diseño web", "E-commerce", "Branding"].map((label, i) => (
                 <div key={i} style={{ background: "#fff", borderRadius: 10, padding: "10px 12px", display: "flex", gap: 10, alignItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 7, background: i === 0 ? "#B8973E22" : "#0B0B0B0D", flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ width: `${w}%`, height: 7, background: "#1A1A1A22", borderRadius: 2, marginBottom: 5 }} />
-                    <div style={{ width: "50%", height: 6, background: "#1A1A1A11", borderRadius: 2 }} />
-                  </div>
+                  <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 10, color: "#1A1A1A", margin: 0 }}>{label}</p>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Right: Browser (smaller, behind) */}
+        {/* Right: Browser */}
         <div
           style={{
             filter: `blur(${rBlur}px)`,
-            transform: `perspective(1600px) rotateY(${rRotY}deg) translateX(${rTX}px) translateY(${rFloat}px) scale(${rSc})`,
+            transform: `perspective(1600px) rotateY(${rRotY}deg) translateX(${rTX + rFloat.x * 2}px) translateY(${rFloat.y}px) scale(${rSc})`,
             zIndex: 1,
           }}
         >
@@ -654,29 +842,32 @@ const SceneDouble: React.FC = () => {
               {["#FF5F56", "#FFBD2E", "#27C93F"].map((c, i) => (
                 <div key={i} style={{ width: 10, height: 10, borderRadius: 5, background: c }} />
               ))}
-              <div style={{ flex: 1, margin: "0 14px", background: "#2A2A2A", borderRadius: 6, height: 22, display: "flex", alignItems: "center", paddingLeft: 10 }}>
-                <div style={{ width: 90, height: 6, background: "#3C3C3C", borderRadius: 2 }} />
+              <div style={{ flex: 1, margin: "0 14px", background: "#2A2A2A", borderRadius: 6, height: 22, display: "flex", alignItems: "center", paddingLeft: 10, gap: 6 }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#27C93F", opacity: 0.7 }} />
+                <p style={{ fontFamily: "'InterVar', system-ui", fontSize: 9, color: "rgba(255,255,255,0.25)", margin: 0 }}>augustocs.studio</p>
               </div>
             </div>
             <div style={{ background: "#0B0B0B", height: 360, padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ width: 80, height: 12, background: "#B8973E", borderRadius: 3 }} />
+                <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 700, fontSize: 14, color: GOLD, margin: 0 }}>AugustoCS</p>
                 <div style={{ display: "flex", gap: 18 }}>
-                  {[40, 34, 46, 38].map((w, i) => (
-                    <div key={i} style={{ width: w, height: 8, background: "rgba(255,255,255,0.25)", borderRadius: 2 }} />
+                  {["Inicio", "Servicios", "Proyectos", "Contacto"].map((l, i) => (
+                    <p key={i} style={{ fontFamily: "'InterVar', system-ui", fontSize: 10, color: "rgba(255,255,255,0.22)", margin: 0 }}>{l}</p>
                   ))}
                 </div>
               </div>
               <div>
-                <div style={{ width: 320, height: 22, background: "rgba(255,255,255,0.85)", borderRadius: 4, marginBottom: 10 }} />
-                <div style={{ width: 260, height: 14, background: "rgba(255,255,255,0.35)", borderRadius: 3, marginBottom: 8 }} />
-                <div style={{ width: 108, height: 34, background: "#B8973E", borderRadius: 8, marginTop: 14 }} />
+                <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 800, fontSize: 24, color: "rgba(255,255,255,0.92)", margin: 0, lineHeight: 1.1 }}>Tu web. Tu marca.</p>
+                <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 400, fontSize: 14, color: "rgba(255,255,255,0.38)", margin: "8px 0 0" }}>Diseño profesional que genera resultados reales.</p>
+                <div style={{ display: "inline-flex", alignItems: "center", background: GOLD, borderRadius: 8, padding: "0 20px", height: 34, marginTop: 14 }}>
+                  <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 12, color: "#fff", margin: 0 }}>Quiero mi web →</p>
+                </div>
               </div>
               <div style={{ display: "flex", gap: 12 }}>
-                {[1, 2, 3].map((i) => (
+                {["Landing", "E-commerce", "Branding"].map((label, i) => (
                   <div key={i} style={{ flex: 1, height: 80, background: "#161616", borderRadius: 10, border: "1px solid rgba(255,255,255,0.05)", padding: 12 }}>
-                    <div style={{ width: 24, height: 24, background: i === 1 ? "#B8973E22" : "#fff08", borderRadius: 6, marginBottom: 8 }} />
-                    <div style={{ width: "70%", height: 6, background: "rgba(255,255,255,0.35)", borderRadius: 2 }} />
+                    <div style={{ width: 24, height: 24, background: i === 0 ? "#B8973E22" : "#ffffff08", borderRadius: 6, marginBottom: 8 }} />
+                    <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 10, color: "rgba(255,255,255,0.5)", margin: 0 }}>{label}</p>
                   </div>
                 ))}
               </div>
@@ -703,11 +894,12 @@ const SceneDouble: React.FC = () => {
   );
 };
 
-// ── Scene 6: Stats (120f) — counter animation ─────────────────
+// ── Scene 6: Stats (120f) ─────────────────────────────────────
 const SceneStats: React.FC = () => {
   const f = useCurrentFrame();
   const count = Math.round(fi(f, 0, 50, 0, 12));
   const numOp = fi(f, 0, 20, 0, 1);
+  const numScale = fi(f, 0, 50, 0.88, 1);
   const l1Op = fi(f, 22, 42, 0, 1);
   const divOp = fi(f, 40, 60, 0, 0.2);
   const l2Op = fi(f, 55, 75, 0, 0.7);
@@ -743,6 +935,7 @@ const SceneStats: React.FC = () => {
           lineHeight: 1,
           opacity: numOp,
           letterSpacing: "-0.02em",
+          transform: `scale(${numScale})`,
         }}
       >
         {count}
@@ -853,46 +1046,52 @@ const SceneCTA: React.FC = () => {
   );
 };
 
-// ── Root (total ≈ 1050 – 7×15 = 945f) ────────────────────────
+// ── Root — scenes + global overlays ──────────────────────────
 export const Reel: React.FC = () => {
   const FADE = 15;
   const t = linearTiming({ durationInFrames: FADE });
 
   return (
-    <TransitionSeries>
-      <TransitionSeries.Sequence durationInFrames={90}>
-        <SceneIntro />
-      </TransitionSeries.Sequence>
-      <TransitionSeries.Transition timing={t} presentation={fade()} />
+    <AbsoluteFill>
+      <TransitionSeries>
+        <TransitionSeries.Sequence durationInFrames={90}>
+          <SceneIntro />
+        </TransitionSeries.Sequence>
+        <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-      <TransitionSeries.Sequence durationInFrames={180}>
-        <SceneHook />
-      </TransitionSeries.Sequence>
-      <TransitionSeries.Transition timing={t} presentation={fade()} />
+        <TransitionSeries.Sequence durationInFrames={180}>
+          <SceneHook />
+        </TransitionSeries.Sequence>
+        <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-      <TransitionSeries.Sequence durationInFrames={270}>
-        <ScenePhone />
-      </TransitionSeries.Sequence>
-      <TransitionSeries.Transition timing={t} presentation={fade()} />
+        <TransitionSeries.Sequence durationInFrames={270}>
+          <ScenePhone />
+        </TransitionSeries.Sequence>
+        <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-      <TransitionSeries.Sequence durationInFrames={210}>
-        <SceneBrowser />
-      </TransitionSeries.Sequence>
-      <TransitionSeries.Transition timing={t} presentation={fade()} />
+        <TransitionSeries.Sequence durationInFrames={210}>
+          <SceneBrowser />
+        </TransitionSeries.Sequence>
+        <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-      <TransitionSeries.Sequence durationInFrames={180}>
-        <SceneDouble />
-      </TransitionSeries.Sequence>
-      <TransitionSeries.Transition timing={t} presentation={fade()} />
+        <TransitionSeries.Sequence durationInFrames={180}>
+          <SceneDouble />
+        </TransitionSeries.Sequence>
+        <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-      <TransitionSeries.Sequence durationInFrames={120}>
-        <SceneStats />
-      </TransitionSeries.Sequence>
-      <TransitionSeries.Transition timing={t} presentation={fade()} />
+        <TransitionSeries.Sequence durationInFrames={120}>
+          <SceneStats />
+        </TransitionSeries.Sequence>
+        <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-      <TransitionSeries.Sequence durationInFrames={90}>
-        <SceneCTA />
-      </TransitionSeries.Sequence>
-    </TransitionSeries>
+        <TransitionSeries.Sequence durationInFrames={90}>
+          <SceneCTA />
+        </TransitionSeries.Sequence>
+      </TransitionSeries>
+
+      {/* Global post-processing — over all scenes */}
+      <Vignette />
+      <GrainOverlay />
+    </AbsoluteFill>
   );
 };
