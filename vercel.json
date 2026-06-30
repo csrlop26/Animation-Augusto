@@ -1,0 +1,10 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ':(exclude)reel'",
+  "env": {
+    "NEXT_TELEMETRY_DISABLED": "1"
+  }
+}
