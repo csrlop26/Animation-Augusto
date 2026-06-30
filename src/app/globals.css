@@ -1,26 +1,45 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-gold: #c9a86c;
+  --color-gold-dim: #c9a86c40;
+  --color-rose: #f0b8c0;
+  --color-rose-dim: #f0b8c030;
+  --color-dark: #080808;
+  --color-surface: #111111;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --background: #ffffff;
+  --foreground: #111111;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Glow utilities */
+.glow-gold {
+  box-shadow:
+    0 0 30px 0 #c9a86c30,
+    0 0 80px 0 #c9a86c18,
+    inset 0 0 0 1px #c9a86c25;
+}
+
+.glow-rose {
+  box-shadow:
+    0 0 30px 0 #f0b8c030,
+    0 0 80px 0 #f0b8c018,
+    inset 0 0 0 1px #f0b8c025;
+}
+
+.text-glow-gold {
+  text-shadow: 0 0 40px #c9a86c60;
 }
