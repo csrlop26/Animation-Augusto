@@ -41,7 +41,7 @@ export default function ReelPage() {
       >
         <Player
           component={Reel}
-          durationInFrames={900}
+          durationInFrames={1050}
           fps={30}
           compositionWidth={1080}
           compositionHeight={1920}
