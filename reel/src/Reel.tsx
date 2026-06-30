@@ -4,11 +4,12 @@ import {
   useCurrentFrame,
   interpolate,
   Easing,
+  Img,
+  staticFile,
 } from "remotion";
 import { TransitionSeries, linearTiming } from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
 import { loadFont } from "@remotion/fonts";
-import { staticFile } from "remotion";
 import { noise2D } from "@remotion/noise";
 
 loadFont({
@@ -18,10 +19,14 @@ loadFont({
   style: "normal",
 });
 
-const BG = "#F0EFEB";
-const INK = "#1A1A1A";
-const GOLD = "#B8973E";
+// ── Tokens ────────────────────────────────────────────────────────────────────
+const BG = "#080808";
+const CREAM = "#F0EFEB";
+const RUST = "#C96A3A";
+const ra = (a: number) => `rgba(201,106,58,${a})`;
+const ca = (a: number) => `rgba(240,239,235,${a})`;
 
+// ── Easing ────────────────────────────────────────────────────────────────────
 const ease = Easing.bezier(0.16, 1, 0.3, 1);
 
 function fi(f: number, from: number, to: number, a: number, b: number): number {
@@ -32,29 +37,30 @@ function fi(f: number, from: number, to: number, a: number, b: number): number {
   });
 }
 
-function blurReveal(f: number, start: number, dur = 22) {
-  return {
-    opacity: fi(f, start, start + dur, 0, 1),
-    filter: `blur(${fi(f, start, start + dur, 12, 0)}px)`,
-  };
-}
+// ── Logo SVG (inline — no network dep) ────────────────────────────────────────
+const LogoMark: React.FC<{ size?: number; style?: React.CSSProperties }> = ({
+  size = 100,
+  style,
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 100 100"
+    style={style}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {/* Left side — cream */}
+    <polygon points="12,90 48,8 56,8 29,90" fill="#E9E4DC" />
+    {/* Right side — dark charcoal */}
+    <polygon points="36,90 53,8 62,8 80,90" fill="#2C2928" />
+    {/* Crossbar */}
+    <polygon points="24,63 76,63 79,74 21,74" fill="#2C2928" />
+    {/* Orange dot */}
+    <circle cx="77" cy="19" r="9.5" fill="#C96A3A" />
+  </svg>
+);
 
-function glowPulse(f: number, base: number, amp: number, period: number) {
-  return base + Math.sin((f / period) * Math.PI * 2) * amp;
-}
-
-// Organic float using Perlin noise (more natural than Math.sin)
-function organicFloat(f: number, seedX: string, seedY: string, entryFrame = 80) {
-  const progress = fi(f, entryFrame, entryFrame + 20, 0, 1);
-  return {
-    x: noise2D(seedX, f / 90, 0) * 5 * progress,
-    y: noise2D(seedY, f / 70, 0) * 14 * progress,
-  };
-}
-
-// ── Global overlays ───────────────────────────────────────────
-
-// Film grain: SVG feTurbulence, seed changes every frame = animated grain
+// ── Global overlays ───────────────────────────────────────────────────────────
 const GrainOverlay: React.FC = () => {
   const f = useCurrentFrame();
   const seed = f % 600;
@@ -64,15 +70,15 @@ const GrainOverlay: React.FC = () => {
         zIndex: 300,
         pointerEvents: "none",
         mixBlendMode: "overlay",
-        opacity: 0.055,
+        opacity: 0.042,
       }}
     >
       <svg width="1080" height="1920" style={{ position: "absolute" }}>
         <defs>
-          <filter id={`grain-${seed}`} x="0%" y="0%" width="100%" height="100%">
+          <filter id={`g${seed}`} x="0%" y="0%" width="100%" height="100%">
             <feTurbulence
               type="fractalNoise"
-              baseFrequency="0.72 0.75"
+              baseFrequency="0.71 0.74"
               numOctaves="4"
               seed={seed}
               stitchTiles="stitch"
@@ -81,82 +87,82 @@ const GrainOverlay: React.FC = () => {
           </filter>
         </defs>
         <rect
-          x="0" y="0" width="1080" height="1920"
-          filter={`url(#grain-${seed})`}
+          x="0"
+          y="0"
+          width="1080"
+          height="1920"
+          filter={`url(#g${seed})`}
         />
       </svg>
     </AbsoluteFill>
   );
 };
 
-// Cinematic vignette: dark edges, transparent center
 const Vignette: React.FC = () => (
   <AbsoluteFill
     style={{
       zIndex: 250,
       pointerEvents: "none",
       background:
-        "radial-gradient(ellipse 80% 70% at 50% 50%, transparent 40%, rgba(0,0,0,0.38) 100%)",
+        "radial-gradient(ellipse 80% 70% at 50% 50%, transparent 30%, rgba(0,0,0,0.65) 100%)",
     }}
   />
 );
 
-// ── Scene 1: Intro (90f) ──────────────────────────────────────
+// ── Ambient glow helper ───────────────────────────────────────────────────────
+const AmbientGlow: React.FC<{
+  intensity: number;
+  color?: string;
+  size?: number;
+  top?: string;
+  left?: string;
+}> = ({
+  intensity,
+  color = ra(0.18),
+  size = 700,
+  top = "50%",
+  left = "50%",
+}) => (
+  <div
+    style={{
+      position: "absolute",
+      width: size,
+      height: size,
+      borderRadius: "50%",
+      background: `radial-gradient(circle, ${color} 0%, transparent 70%)`,
+      filter: "blur(80px)",
+      top,
+      left,
+      transform: "translate(-50%, -50%)",
+      opacity: intensity,
+      pointerEvents: "none",
+    }}
+  />
+);
+
+// ── Scene 1: INTRO ────────────────────────────────────────────────────────────
 const SceneIntro: React.FC = () => {
   const f = useCurrentFrame();
-  const ls = fi(f, 5, 75, 0.28, 0.5);
+  const glowIn = fi(f, 0, 60, 0, 1);
+  const logoIn = fi(f, 15, 55, 0, 1);
+  const logoScale = fi(f, 15, 55, 0.88, 1);
+  const subIn = fi(f, 40, 68, 0, 1);
 
   return (
     <AbsoluteFill
-      style={{
-        background: BG,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+      style={{ background: BG, alignItems: "center", justifyContent: "center" }}
     >
-      <p
-        style={{
-          fontFamily: "'InterVar', system-ui",
-          fontWeight: 500,
-          fontSize: 30,
-          letterSpacing: `${ls}em`,
-          color: INK,
-          textTransform: "uppercase",
-          margin: 0,
-          ...blurReveal(f, 0, 28),
-        }}
-      >
-        AugustoCS
-      </p>
-    </AbsoluteFill>
-  );
-};
-
-// ── Scene 2: Hook (180f) ──────────────────────────────────────
-const SceneHook: React.FC = () => {
-  const f = useCurrentFrame();
-  const glowOp = glowPulse(f, fi(f, 0, 60, 0, 0.9), 0.08, 90);
-
-  return (
-    <AbsoluteFill
-      style={{
-        background: BG,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-      }}
-    >
+      <AmbientGlow intensity={glowIn * 0.9} size={700} />
+      {/* Secondary warmer glow */}
       <div
         style={{
           position: "absolute",
-          width: 860,
-          height: 560,
-          background: "radial-gradient(ellipse, rgba(184,151,62,0.26) 0%, transparent 65%)",
-          opacity: glowOp,
-          filter: "blur(80px)",
-          top: "40%",
+          width: 300,
+          height: 300,
+          borderRadius: "50%",
+          background: `radial-gradient(circle, ${ra(0.25 * glowIn)} 0%, transparent 70%)`,
+          filter: "blur(40px)",
+          top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
         }}
@@ -166,887 +172,667 @@ const SceneHook: React.FC = () => {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 6,
-          zIndex: 1,
-          paddingLeft: 60,
-          paddingRight: 60,
+          gap: 28,
+          opacity: logoIn,
+          transform: `scale(${logoScale})`,
         }}
       >
-        <p
+        <LogoMark size={148} />
+        <div
           style={{
-            fontFamily: "'InterVar', system-ui",
+            fontFamily: "'InterVar', Inter, sans-serif",
+            fontSize: 18,
+            fontWeight: 300,
+            color: ca(0.55),
+            letterSpacing: "0.5em",
+            textTransform: "uppercase",
+          }}
+        >
+          AugustoCS
+        </div>
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          bottom: 170,
+          opacity: subIn,
+          fontFamily: "'InterVar', Inter, sans-serif",
+          fontSize: 13,
+          fontWeight: 300,
+          color: ca(0.28),
+          letterSpacing: "0.25em",
+          textTransform: "uppercase",
+        }}
+      >
+        Estudio de Diseño Web · Castellón
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// ── Scene 2: HOOK ─────────────────────────────────────────────────────────────
+const SceneHook: React.FC = () => {
+  const f = useCurrentFrame();
+
+  const line1Op = fi(f, 0, 24, 0, 1);
+  const line1Y = fi(f, 0, 24, 48, 0);
+  const line1Blur = fi(f, 0, 24, 10, 0);
+
+  const line2Op = fi(f, 18, 42, 0, 1);
+  const line2Y = fi(f, 18, 42, 48, 0);
+  const line2Blur = fi(f, 18, 42, 10, 0);
+
+  const tagOp = fi(f, 55, 80, 0, 1);
+
+  return (
+    <AbsoluteFill
+      style={{ background: BG, justifyContent: "center", paddingLeft: 68 }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: `radial-gradient(ellipse 90% 60% at 0% 60%, ${ra(0.1)} 0%, transparent 65%)`,
+        }}
+      />
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div
+          style={{
+            opacity: line1Op,
+            transform: `translateY(${line1Y}px)`,
+            filter: `blur(${line1Blur}px)`,
+            fontFamily: "'InterVar', Inter, sans-serif",
+            fontSize: 112,
             fontWeight: 800,
-            fontSize: 140,
-            color: INK,
-            margin: 0,
+            color: CREAM,
             lineHeight: 1.0,
-            textAlign: "center",
-            ...blurReveal(f, 0, 26),
+            letterSpacing: "-0.04em",
           }}
         >
           Diseño web
-        </p>
-        <p
+        </div>
+        <div
           style={{
-            fontFamily: "'InterVar', system-ui",
+            opacity: line2Op,
+            transform: `translateY(${line2Y}px)`,
+            filter: `blur(${line2Blur}px)`,
+            fontFamily: "'InterVar', Inter, sans-serif",
+            fontSize: 112,
             fontWeight: 800,
-            fontSize: 140,
-            color: GOLD,
-            margin: 0,
+            color: RUST,
             lineHeight: 1.0,
-            textAlign: "center",
-            ...blurReveal(f, 22, 26),
+            letterSpacing: "-0.04em",
           }}
         >
-          que convierte.
-        </p>
+          que vende.
+        </div>
+        <div
+          style={{
+            opacity: tagOp,
+            marginTop: 36,
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+          }}
+        >
+          <div style={{ width: 30, height: 1, background: ra(0.5) }} />
+          <div
+            style={{
+              fontFamily: "'InterVar', Inter, sans-serif",
+              fontSize: 13,
+              fontWeight: 300,
+              color: ca(0.45),
+              letterSpacing: "0.22em",
+              textTransform: "uppercase",
+            }}
+          >
+            Premium · Conversión · Resultados
+          </div>
+        </div>
       </div>
-      <p
-        style={{
-          fontFamily: "'InterVar', system-ui",
-          fontWeight: 400,
-          fontSize: 38,
-          color: INK,
-          marginTop: 52,
-          letterSpacing: "0.02em",
-          zIndex: 1,
-          textAlign: "center",
-          paddingLeft: 80,
-          paddingRight: 80,
-          ...blurReveal(f, 72, 22),
-          opacity: (blurReveal(f, 72, 22).opacity as number) * 0.55,
-        }}
-      >
-        Webs a medida que generan resultados.
-      </p>
     </AbsoluteFill>
   );
 };
 
-// ── Phone screen — real text content ─────────────────────────
-const PhoneScreen: React.FC<{ f: number }> = ({ f }) => {
-  const headerStyle = blurReveal(f, 75, 18);
-  const heroStyle = { opacity: fi(f, 88, 108, 0, 1), transform: `translateY(${fi(f, 88, 108, 12, 0)}px)` };
-  const btnStyle = { opacity: fi(f, 108, 126, 0, 1), transform: `scale(${fi(f, 108, 126, 0.88, 1)})` };
-  const card1Style = { opacity: fi(f, 118, 136, 0, 1), transform: `translateX(${fi(f, 118, 136, 22, 0)}px)` };
-  const card2Style = { opacity: fi(f, 130, 148, 0, 1), transform: `translateX(${fi(f, 130, 148, 22, 0)}px)` };
-  const card3Style = { opacity: fi(f, 142, 160, 0, 1), transform: `translateX(${fi(f, 142, 160, 22, 0)}px)` };
+// ── Phone Mockup ──────────────────────────────────────────────────────────────
+interface MockupProps {
+  imgSrc: string;
+  clientName: string;
+  projectType: string;
+  totalFrames: number;
+}
 
-  const cards = [
-    { style: card1Style, accent: "#B8973E22", label: "Diseño web", sub: "Landing page" },
-    { style: card2Style, accent: "#0B0B0B0D", label: "E-commerce", sub: "Tienda online" },
-    { style: card3Style, accent: "#0B0B0B0D", label: "Branding", sub: "Identidad visual" },
-  ];
+const ScenePhone: React.FC<MockupProps> = ({
+  imgSrc,
+  clientName,
+  projectType,
+  totalFrames,
+}) => {
+  const f = useCurrentFrame();
+
+  const entryP = fi(f, 0, 75, 0, 1);
+  const glow = fi(f, 30, 90, 0, 1);
+  const glowPulse = 0.75 + Math.sin((f / 45) * Math.PI * 2) * 0.14;
+
+  // Float
+  const floatY = noise2D("phoneY" + imgSrc, f / 80, 0) * 12 * fi(f, 75, 95, 0, 1);
+  const floatX = noise2D("phoneX" + imgSrc, f / 95, 0) * 6 * fi(f, 75, 95, 0, 1);
+
+  // 3D entry tilt
+  const rotY = fi(f, 0, 75, -22, -7);
+  const rotX = fi(f, 0, 75, 6, 2);
+  const entryY = fi(f, 0, 60, 200, 0);
+  const deviceOp = fi(f, 0, 45, 0, 1);
+
+  // Slow image pan
+  const scrollPos = fi(f, 60, totalFrames, 0, 28);
+
+  const labelOp = fi(f, 80, 100, 0, 1);
+  const labelY = fi(f, 80, 100, 18, 0);
+
+  const W = 390;
+  const H = 840;
+  const R = 52;
 
   return (
-    <div style={{ background: "#fff", width: "100%", height: "100%" }}>
-      {/* Nav */}
+    <AbsoluteFill
+      style={{ background: BG, alignItems: "center", justifyContent: "center" }}
+    >
+      <AmbientGlow
+        intensity={glow * glowPulse * 0.85}
+        size={750}
+        color={ra(0.2)}
+      />
+
+      {/* Phone */}
       <div
         style={{
-          background: "#0B0B0B",
-          height: 72,
-          display: "flex",
-          alignItems: "flex-end",
-          paddingLeft: 24,
-          paddingBottom: 12,
-          paddingRight: 24,
-          justifyContent: "space-between",
-          ...headerStyle,
+          opacity: deviceOp,
+          transform: `translateY(${entryY + floatY}px) translateX(${floatX}px) perspective(1400px) rotateY(${rotY}deg) rotateX(${rotX}deg)`,
+          transformOrigin: "center center",
+          marginBottom: 120,
+          width: W,
+          height: H,
+          borderRadius: R,
+          background: "#0C0C0C",
+          border: "1.5px solid rgba(255,255,255,0.07)",
+          boxShadow: `
+            0 0 0 1px ${ra(0.45 * glow * glowPulse)},
+            0 0 25px 6px ${ra(0.28 * glow * glowPulse)},
+            0 0 70px 20px ${ra(0.14 * glow * glowPulse)},
+            0 0 140px 50px ${ra(0.06 * glow * glowPulse)},
+            0 50px 120px 30px rgba(0,0,0,0.95)
+          `,
+          overflow: "hidden",
+          position: "relative",
+          flexShrink: 0,
         }}
       >
-        <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 700, fontSize: 13, color: GOLD, margin: 0, letterSpacing: "0.06em" }}>
-          AugustoCS
-        </p>
-        <div style={{ display: "flex", gap: 14 }}>
-          {["Inicio", "Servicios", "Contacto"].map((label, i) => (
-            <p key={i} style={{ fontFamily: "'InterVar', system-ui", fontSize: 9, color: "rgba(255,255,255,0.42)", margin: 0 }}>
-              {label}
-            </p>
-          ))}
-        </div>
+        {/* Dynamic Island */}
+        <div
+          style={{
+            position: "absolute",
+            top: 14,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 116,
+            height: 34,
+            background: "#050505",
+            borderRadius: 17,
+            zIndex: 10,
+          }}
+        />
+        {/* Screenshot */}
+        <Img
+          src={staticFile(imgSrc)}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: `center ${scrollPos}%`,
+            display: "block",
+          }}
+        />
+        {/* Glass shine */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 20,
+            pointerEvents: "none",
+            borderRadius: R,
+            background:
+              "linear-gradient(145deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 25%, transparent 50%)",
+          }}
+        />
+        {/* Inner amber rim */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 19,
+            pointerEvents: "none",
+            borderRadius: R,
+            boxShadow: `inset 0 0 24px 4px ${ra(0.18 * glow)}`,
+          }}
+        />
       </div>
 
-      {/* Hero */}
+      {/* Label */}
       <div
         style={{
-          background: "linear-gradient(165deg, #0f0f0f 0%, #1a1230 100%)",
-          height: 230,
+          position: "absolute",
+          bottom: 140,
+          left: 72,
+          opacity: labelOp,
+          transform: `translateY(${labelY}px)`,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            marginBottom: 10,
+          }}
+        >
+          <div style={{ width: 28, height: 1, background: RUST }} />
+          <div
+            style={{
+              fontFamily: "'InterVar', Inter, sans-serif",
+              fontSize: 11,
+              fontWeight: 500,
+              color: RUST,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+            }}
+          >
+            {projectType}
+          </div>
+        </div>
+        <div
+          style={{
+            fontFamily: "'InterVar', Inter, sans-serif",
+            fontSize: 38,
+            fontWeight: 700,
+            color: CREAM,
+            letterSpacing: "-0.025em",
+            lineHeight: 1.1,
+          }}
+        >
+          {clientName}
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// ── Laptop Mockup ─────────────────────────────────────────────────────────────
+const SceneLaptop: React.FC<MockupProps> = ({
+  imgSrc,
+  clientName,
+  projectType,
+  totalFrames,
+}) => {
+  const f = useCurrentFrame();
+
+  const entryP = fi(f, 0, 75, 0, 1);
+  const glow = fi(f, 30, 90, 0, 1);
+  const glowPulse = 0.78 + Math.sin((f / 50) * Math.PI * 2) * 0.13;
+
+  const floatY = noise2D("lapY" + imgSrc, f / 85, 0) * 10 * fi(f, 75, 95, 0, 1);
+
+  const rotX = fi(f, 0, 75, 8, 2);
+  const rotY = fi(f, 0, 75, 12, 4);
+  const entryY = fi(f, 0, 60, -180, 0);
+  const deviceOp = fi(f, 0, 45, 0, 1);
+
+  const scrollPos = fi(f, 60, totalFrames, 0, 22);
+
+  const labelOp = fi(f, 80, 100, 0, 1);
+  const labelY = fi(f, 80, 100, 18, 0);
+
+  const W = 860;
+  const H = 530;
+  const R = 14;
+
+  return (
+    <AbsoluteFill
+      style={{ background: BG, alignItems: "center", justifyContent: "center" }}
+    >
+      <AmbientGlow
+        intensity={glow * glowPulse * 0.8}
+        size={900}
+        color={ra(0.18)}
+        top="45%"
+      />
+
+      {/* Laptop screen */}
+      <div
+        style={{
+          opacity: deviceOp,
+          transform: `translateY(${entryY + floatY}px) perspective(1600px) rotateX(${rotX}deg) rotateY(${rotY}deg)`,
+          transformOrigin: "center center",
+          marginBottom: 180,
+          width: W,
+          height: H,
+          borderRadius: R,
+          background: "#0A0A0A",
+          border: "1.5px solid rgba(255,255,255,0.06)",
+          boxShadow: `
+            0 0 0 1px ${ra(0.4 * glow * glowPulse)},
+            0 0 28px 7px ${ra(0.25 * glow * glowPulse)},
+            0 0 80px 25px ${ra(0.12 * glow * glowPulse)},
+            0 0 160px 60px ${ra(0.05 * glow * glowPulse)},
+            0 60px 140px 40px rgba(0,0,0,0.95)
+          `,
+          overflow: "hidden",
+          position: "relative",
+          flexShrink: 0,
+        }}
+      >
+        {/* Camera notch */}
+        <div
+          style={{
+            position: "absolute",
+            top: 6,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: "#1a1a1a",
+            zIndex: 10,
+          }}
+        />
+        {/* Screenshot */}
+        <Img
+          src={staticFile(imgSrc)}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: `center ${scrollPos}%`,
+            display: "block",
+          }}
+        />
+        {/* Glass shine */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 20,
+            pointerEvents: "none",
+            borderRadius: R,
+            background:
+              "linear-gradient(140deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 20%, transparent 45%)",
+          }}
+        />
+        {/* Inner amber rim */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 19,
+            pointerEvents: "none",
+            borderRadius: R,
+            boxShadow: `inset 0 0 30px 6px ${ra(0.16 * glow)}`,
+          }}
+        />
+      </div>
+
+      {/* Label */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 130,
+          left: 72,
+          opacity: labelOp,
+          transform: `translateY(${labelY}px)`,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            marginBottom: 10,
+          }}
+        >
+          <div style={{ width: 28, height: 1, background: RUST }} />
+          <div
+            style={{
+              fontFamily: "'InterVar', Inter, sans-serif",
+              fontSize: 11,
+              fontWeight: 500,
+              color: RUST,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+            }}
+          >
+            {projectType}
+          </div>
+        </div>
+        <div
+          style={{
+            fontFamily: "'InterVar', Inter, sans-serif",
+            fontSize: 38,
+            fontWeight: 700,
+            color: CREAM,
+            letterSpacing: "-0.025em",
+            lineHeight: 1.1,
+          }}
+        >
+          {clientName}
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// ── Scene 6: Stats + Ticker ───────────────────────────────────────────────────
+const SceneTicker: React.FC = () => {
+  const f = useCurrentFrame();
+
+  const count = Math.round(fi(f, 0, 55, 0, 7));
+  const countOp = fi(f, 0, 25, 0, 1);
+  const countBlur = fi(f, 0, 25, 12, 0);
+
+  const lineOp = fi(f, 40, 60, 0, 1);
+
+  const tickerX = fi(f, 0, 90, 120, -2400);
+
+  const TICKER =
+    "Robot Energy · Madre Superiora · La Trattoria · AutoTietz · Nova · Odentrics · La Piccoleta · B2Tech · Robot Energy · Madre Superiora · La Trattoria · AutoTietz · ";
+
+  return (
+    <AbsoluteFill
+      style={{ background: BG, justifyContent: "center", overflow: "hidden" }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: `radial-gradient(ellipse 80% 50% at 50% 45%, ${ra(0.1)} 0%, transparent 65%)`,
+        }}
+      />
+
+      {/* Number */}
+      <div
+        style={{
           display: "flex",
           flexDirection: "column",
-          justifyContent: "flex-end",
-          padding: 24,
-          gap: 0,
-          ...heroStyle,
+          alignItems: "center",
+          gap: 14,
+          opacity: countOp,
+          filter: `blur(${countBlur}px)`,
         }}
       >
-        <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 800, fontSize: 20, color: "rgba(255,255,255,0.95)", margin: 0, lineHeight: 1.15 }}>
-          Tu Negocio Online
-        </p>
-        <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 400, fontSize: 12, color: "rgba(255,255,255,0.48)", margin: "6px 0 0" }}>
-          Diseño web que convierte visitas
-        </p>
         <div
           style={{
-            ...btnStyle,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: GOLD,
-            borderRadius: 10,
-            marginTop: 14,
-            paddingLeft: 16,
-            paddingRight: 16,
-            height: 34,
-            width: "fit-content",
-          }}
-        >
-          <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 11, color: "#fff", margin: 0 }}>
-            Empieza hoy →
-          </p>
-        </div>
-      </div>
-
-      {/* Cards */}
-      <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12, background: "#fafafa" }}>
-        {cards.map((card, i) => (
-          <div
-            key={i}
-            style={{
-              background: "#fff",
-              borderRadius: 14,
-              padding: "13px 15px",
-              display: "flex",
-              alignItems: "center",
-              gap: 13,
-              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-              ...card.style,
-            }}
-          >
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: card.accent, flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
-              <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 11, color: "#1A1A1A", margin: 0 }}>
-                {card.label}
-              </p>
-              <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 400, fontSize: 9, color: "rgba(26,26,26,0.42)", margin: "3px 0 0" }}>
-                {card.sub}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const Phone: React.FC<{ f: number }> = ({ f }) => (
-  <div
-    style={{
-      width: 370,
-      height: 750,
-      background: "#1C1C1E",
-      borderRadius: 54,
-      border: "10px solid #2A2A2C",
-      overflow: "hidden",
-      position: "relative",
-      boxShadow:
-        "0 80px 160px rgba(0,0,0,0.45), 0 20px 40px rgba(0,0,0,0.2), inset 0 0 0 1px rgba(255,255,255,0.08)",
-    }}
-  >
-    {/* Dynamic island */}
-    <div
-      style={{
-        position: "absolute",
-        top: 10,
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: 120,
-        height: 36,
-        background: "#000",
-        borderRadius: 20,
-        zIndex: 10,
-      }}
-    />
-    {/* Glass reflection — diagonal highlight, premium device look */}
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 20,
-        pointerEvents: "none",
-        borderRadius: 44,
-        background:
-          "linear-gradient(135deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.04) 30%, transparent 55%)",
-      }}
-    />
-    <PhoneScreen f={f} />
-  </div>
-);
-
-// ── Scene 3: Phone (270f) ─────────────────────────────────────
-const ScenePhone: React.FC = () => {
-  const f = useCurrentFrame();
-
-  // Entry animation
-  const rotY = fi(f, 0, 80, -24, -6);
-  const rotX = fi(f, 0, 80, 10, 2);
-  const ty = fi(f, 0, 80, 340, 0);
-  const sc = fi(f, 0, 80, 0.8, 1);
-  const glowOp = glowPulse(f, fi(f, 30, 100, 0, 0.8), 0.06, 80);
-  const labelOp = fi(f, 85, 115, 0, 0.65);
-
-  // Directional motion blur: heavy horizontal during 3D rotation entry
-  const mbX = fi(f, 0, 58, 22, 0);
-  const mbY = fi(f, 0, 58, 3, 0);
-  const mbSeed = `phone-mb-${f}`;
-
-  // Organic Perlin float (replaces Math.sin — irregular, more realistic)
-  const float = organicFloat(f, "ph-fx", "ph-fy", 80);
-
-  return (
-    <AbsoluteFill
-      style={{
-        background: BG,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-      }}
-    >
-      {/* SVG directional blur definition */}
-      <svg style={{ position: "absolute", width: 0, height: 0 }}>
-        <defs>
-          <filter id="phone-dir-blur">
-            <feGaussianBlur stdDeviation={`${mbX} ${mbY}`} />
-          </filter>
-        </defs>
-      </svg>
-
-      <div
-        style={{
-          position: "absolute",
-          width: 640,
-          height: 640,
-          background: "radial-gradient(circle, rgba(184,151,62,0.3) 0%, transparent 68%)",
-          opacity: glowOp,
-          filter: "blur(100px)",
-        }}
-      />
-      <div
-        style={{
-          filter: mbX > 0.4 ? "url(#phone-dir-blur)" : "none",
-          transform: `perspective(1500px) rotateY(${rotY}deg) rotateX(${rotX}deg) translateX(${float.x}px) translateY(${ty + float.y}px) scale(${sc})`,
-        }}
-      >
-        <Phone f={f} />
-      </div>
-      <p
-        style={{
-          fontFamily: "'InterVar', system-ui",
-          fontWeight: 400,
-          fontSize: 28,
-          color: INK,
-          opacity: labelOp,
-          letterSpacing: "0.1em",
-          marginTop: 64,
-          textTransform: "uppercase",
-        }}
-      >
-        Tu web · Tu negocio
-      </p>
-    </AbsoluteFill>
-  );
-};
-
-// ── Browser content — real text ───────────────────────────────
-const BrowserContent: React.FC<{ f: number }> = ({ f }) => {
-  const navStyle = { opacity: fi(f, 65, 82, 0, 1) };
-  const h1Style = { opacity: fi(f, 78, 96, 0, 1), transform: `translateY(${fi(f, 78, 96, 14, 0)}px)` };
-  const h2Style = { opacity: fi(f, 90, 106, 0, 1), transform: `translateY(${fi(f, 90, 106, 10, 0)}px)` };
-  const btnStyle = { opacity: fi(f, 100, 116, 0, 1), transform: `scale(${fi(f, 100, 116, 0.9, 1)})` };
-  const card1Op = fi(f, 112, 128, 0, 1);
-  const card2Op = fi(f, 122, 138, 0, 1);
-  const card3Op = fi(f, 132, 148, 0, 1);
-
-  const serviceCards = [
-    { op: card1Op, icon: "#B8973E22", title: "Landing", desc: "Convierte" },
-    { op: card2Op, icon: "#ffffff09", title: "E-commerce", desc: "Vende 24/7" },
-    { op: card3Op, icon: "#ffffff09", title: "Branding", desc: "Destaca" },
-  ];
-
-  return (
-    <>
-      {/* Nav */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          ...navStyle,
-        }}
-      >
-        <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 700, fontSize: 17, color: GOLD, margin: 0, letterSpacing: "0.04em" }}>
-          AugustoCS
-        </p>
-        <div style={{ display: "flex", gap: 28 }}>
-          {["Inicio", "Servicios", "Proyectos", "Contacto"].map((label, i) => (
-            <p key={i} style={{ fontFamily: "'InterVar', system-ui", fontSize: 12, color: "rgba(255,255,255,0.3)", margin: 0 }}>
-              {label}
-            </p>
-          ))}
-        </div>
-      </div>
-
-      {/* Hero text */}
-      <div style={{ paddingTop: 16 }}>
-        <p
-          style={{
-            fontFamily: "'InterVar', system-ui",
+            fontFamily: "'InterVar', Inter, sans-serif",
+            fontSize: 220,
             fontWeight: 800,
-            fontSize: 34,
-            color: "rgba(255,255,255,0.95)",
-            margin: 0,
-            lineHeight: 1.1,
-            ...h1Style,
+            color: CREAM,
+            lineHeight: 1,
+            letterSpacing: "-0.06em",
           }}
         >
-          Tu web. Tu marca.
-        </p>
-        <p
+          {count}+
+        </div>
+        <div
           style={{
-            fontFamily: "'InterVar', system-ui",
-            fontWeight: 400,
+            fontFamily: "'InterVar', Inter, sans-serif",
             fontSize: 18,
-            color: "rgba(255,255,255,0.44)",
-            margin: "10px 0 0",
-            lineHeight: 1.4,
-            ...h2Style,
+            fontWeight: 300,
+            color: ca(0.4),
+            letterSpacing: "0.35em",
+            textTransform: "uppercase",
           }}
         >
-          Diseño profesional que genera
-          <br />resultados reales.
-        </p>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: GOLD,
-            borderRadius: 11,
-            paddingLeft: 28,
-            paddingRight: 28,
-            height: 46,
-            marginTop: 24,
-            ...btnStyle,
-          }}
-        >
-          <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 15, color: "#fff", margin: 0 }}>
-            Quiero mi web →
-          </p>
+          Proyectos entregados
         </div>
       </div>
 
-      {/* Service cards */}
-      <div style={{ display: "flex", gap: 18 }}>
-        {serviceCards.map((card, i) => (
-          <div
-            key={i}
-            style={{
-              flex: 1,
-              height: 110,
-              background: "#161616",
-              borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.06)",
-              padding: 18,
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-              opacity: card.op,
-              transform: `translateY(${fi(f, 112 + i * 10, 128 + i * 10, 18, 0)}px)`,
-            }}
-          >
-            <div style={{ width: 34, height: 34, background: card.icon, borderRadius: 9 }} />
-            <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 12, color: "rgba(255,255,255,0.7)", margin: 0 }}>
-              {card.title}
-            </p>
-            <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 400, fontSize: 10, color: "rgba(255,255,255,0.28)", margin: 0 }}>
-              {card.desc}
-            </p>
-          </div>
-        ))}
-      </div>
-    </>
-  );
-};
-
-const Browser: React.FC<{ f: number }> = ({ f }) => (
-  <div
-    style={{
-      width: 840,
-      borderRadius: 18,
-      overflow: "hidden",
-      boxShadow:
-        "0 70px 150px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.04)",
-    }}
-  >
-    {/* Chrome bar */}
-    <div
-      style={{
-        background: "#1E1E1E",
-        height: 52,
-        display: "flex",
-        alignItems: "center",
-        paddingLeft: 18,
-        gap: 8,
-        position: "relative",
-      }}
-    >
-      {["#FF5F56", "#FFBD2E", "#27C93F"].map((c, i) => (
-        <div key={i} style={{ width: 13, height: 13, borderRadius: 7, background: c }} />
-      ))}
-      {/* Address bar */}
-      <div
-        style={{
-          flex: 1,
-          margin: "0 18px",
-          background: "#2A2A2A",
-          borderRadius: 8,
-          height: 30,
-          display: "flex",
-          alignItems: "center",
-          paddingLeft: 14,
-          gap: 8,
-        }}
-      >
-        <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#27C93F", opacity: 0.7 }} />
-        <p style={{ fontFamily: "'InterVar', system-ui", fontSize: 11, color: "rgba(255,255,255,0.28)", margin: 0 }}>
-          augustocs.studio
-        </p>
-      </div>
-    </div>
-    {/* Site content */}
-    <div
-      style={{
-        background: "#0B0B0B",
-        height: 510,
-        padding: 34,
-        display: "flex",
-        flexDirection: "column",
-        gap: 26,
-      }}
-    >
-      <BrowserContent f={f} />
-    </div>
-  </div>
-);
-
-// ── Scene 4: Browser (210f) ───────────────────────────────────
-const SceneBrowser: React.FC = () => {
-  const f = useCurrentFrame();
-  const tx = fi(f, 0, 78, 280, 0);
-  const rotY = fi(f, 0, 78, 22, 5);
-  const sc = fi(f, 0, 78, 0.84, 1);
-  const glowOp = glowPulse(f, fi(f, 20, 88, 0, 0.72), 0.06, 85);
-  const labelOp = fi(f, 90, 118, 0, 0.6);
-
-  // Directional motion blur: horizontal sweep from right
-  const mbX = fi(f, 0, 56, 20, 0);
-  const mbY = fi(f, 0, 56, 2, 0);
-
-  const float = organicFloat(f, "br-fx", "br-fy", 78);
-
-  return (
-    <AbsoluteFill
-      style={{
-        background: BG,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-      }}
-    >
-      <svg style={{ position: "absolute", width: 0, height: 0 }}>
-        <defs>
-          <filter id="browser-dir-blur">
-            <feGaussianBlur stdDeviation={`${mbX} ${mbY}`} />
-          </filter>
-        </defs>
-      </svg>
-
+      {/* Divider */}
       <div
         style={{
           position: "absolute",
-          width: 740,
-          height: 440,
-          background: "radial-gradient(ellipse, rgba(184,151,62,0.22) 0%, transparent 68%)",
-          opacity: glowOp,
-          filter: "blur(75px)",
+          bottom: 210,
+          left: 0,
+          right: 0,
+          height: 1,
+          opacity: lineOp,
+          background: `linear-gradient(to right, transparent 0%, ${ra(0.35)} 30%, ${ra(0.35)} 70%, transparent 100%)`,
         }}
       />
+
+      {/* Ticker */}
       <div
         style={{
-          filter: mbX > 0.4 ? "url(#browser-dir-blur)" : "none",
-          transform: `perspective(1800px) rotateY(-${rotY}deg) translateX(${tx + float.x * 2}px) translateY(${float.y}px) scale(${sc})`,
+          position: "absolute",
+          bottom: 140,
+          left: 0,
+          right: 0,
+          overflow: "hidden",
+          opacity: lineOp,
         }}
       >
-        <Browser f={f} />
+        <div
+          style={{
+            display: "inline-block",
+            whiteSpace: "nowrap",
+            transform: `translateX(${tickerX}px)`,
+            fontFamily: "'InterVar', Inter, sans-serif",
+            fontSize: 13,
+            fontWeight: 300,
+            color: ca(0.28),
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+          }}
+        >
+          {TICKER}
+        </div>
       </div>
-      <p
-        style={{
-          fontFamily: "'InterVar', system-ui",
-          fontWeight: 400,
-          fontSize: 28,
-          color: INK,
-          opacity: labelOp,
-          letterSpacing: "0.06em",
-          marginTop: 52,
-        }}
-      >
-        @AugustoCS.studio
-      </p>
     </AbsoluteFill>
   );
 };
 
-// ── Scene 5: Double mockup (180f) ─────────────────────────────
-const SceneDouble: React.FC = () => {
-  const f = useCurrentFrame();
-
-  const lRotY = fi(f, 0, 80, -30, -10);
-  const lTX = fi(f, 0, 80, -260, 0);
-  const lBlur = fi(f, 0, 55, 20, 0);
-  const lSc = fi(f, 0, 80, 0.82, 1);
-
-  const rRotY = fi(f, 0, 80, 30, 8);
-  const rTX = fi(f, 0, 80, 260, 0);
-  const rBlur = fi(f, 10, 65, 20, 0);
-  const rSc = fi(f, 0, 80, 0.82, 1);
-
-  const glowOp = glowPulse(f, fi(f, 30, 90, 0, 0.7), 0.07, 90);
-  const labelOp = fi(f, 90, 118, 0, 0.5);
-
-  // Independent organic floats for each device
-  const lFloat = organicFloat(f, "dl-fx", "dl-fy", 80);
-  const rFloat = organicFloat(f, "dr-fx", "dr-fy", 80);
-
-  return (
-    <AbsoluteFill
-      style={{
-        background: BG,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-        gap: 0,
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          width: 900,
-          height: 700,
-          background: "radial-gradient(ellipse, rgba(184,151,62,0.18) 0%, transparent 65%)",
-          opacity: glowOp,
-          filter: "blur(90px)",
-        }}
-      />
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: -20,
-          position: "relative",
-        }}
-      >
-        {/* Left: Phone */}
-        <div
-          style={{
-            filter: `blur(${lBlur}px)`,
-            transform: `perspective(1600px) rotateY(${lRotY}deg) translateX(${lTX + lFloat.x}px) translateY(${lFloat.y}px) scale(${lSc})`,
-            zIndex: 2,
-          }}
-        >
-          <div
-            style={{
-              width: 280,
-              height: 568,
-              background: "#1C1C1E",
-              borderRadius: 44,
-              border: "8px solid #2A2A2C",
-              overflow: "hidden",
-              position: "relative",
-              boxShadow: "0 60px 120px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.07)",
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                top: 8, left: "50%",
-                transform: "translateX(-50%)",
-                width: 90, height: 28,
-                background: "#000",
-                borderRadius: 16,
-                zIndex: 10,
-              }}
-            />
-            {/* Glass reflection */}
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                zIndex: 20,
-                pointerEvents: "none",
-                borderRadius: 36,
-                background: "linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 45%)",
-              }}
-            />
-            <div style={{ background: "#0B0B0B", height: 52, display: "flex", alignItems: "flex-end", padding: "0 18px 10px" }}>
-              <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 700, fontSize: 11, color: GOLD, margin: 0 }}>AugustoCS</p>
-            </div>
-            <div style={{ background: "linear-gradient(165deg, #0f0f0f, #1a1230)", height: 170, padding: 18, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 6 }}>
-              <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 800, fontSize: 15, color: "rgba(255,255,255,0.9)", margin: 0 }}>Tu Negocio Online</p>
-              <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 400, fontSize: 10, color: "rgba(255,255,255,0.4)", margin: 0 }}>Diseño web que convierte</p>
-              <div style={{ width: 78, height: 28, background: GOLD, borderRadius: 8, marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 9, color: "#fff", margin: 0 }}>Empieza →</p>
-              </div>
-            </div>
-            <div style={{ padding: 12, background: "#fafafa", display: "flex", flexDirection: "column", gap: 10 }}>
-              {["Diseño web", "E-commerce", "Branding"].map((label, i) => (
-                <div key={i} style={{ background: "#fff", borderRadius: 10, padding: "10px 12px", display: "flex", gap: 10, alignItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 7, background: i === 0 ? "#B8973E22" : "#0B0B0B0D", flexShrink: 0 }} />
-                  <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 10, color: "#1A1A1A", margin: 0 }}>{label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Browser */}
-        <div
-          style={{
-            filter: `blur(${rBlur}px)`,
-            transform: `perspective(1600px) rotateY(${rRotY}deg) translateX(${rTX + rFloat.x * 2}px) translateY(${rFloat.y}px) scale(${rSc})`,
-            zIndex: 1,
-          }}
-        >
-          <div
-            style={{
-              width: 560,
-              borderRadius: 14,
-              overflow: "hidden",
-              boxShadow: "0 50px 120px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.08)",
-            }}
-          >
-            <div style={{ background: "#1E1E1E", height: 40, display: "flex", alignItems: "center", paddingLeft: 14, gap: 6 }}>
-              {["#FF5F56", "#FFBD2E", "#27C93F"].map((c, i) => (
-                <div key={i} style={{ width: 10, height: 10, borderRadius: 5, background: c }} />
-              ))}
-              <div style={{ flex: 1, margin: "0 14px", background: "#2A2A2A", borderRadius: 6, height: 22, display: "flex", alignItems: "center", paddingLeft: 10, gap: 6 }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#27C93F", opacity: 0.7 }} />
-                <p style={{ fontFamily: "'InterVar', system-ui", fontSize: 9, color: "rgba(255,255,255,0.25)", margin: 0 }}>augustocs.studio</p>
-              </div>
-            </div>
-            <div style={{ background: "#0B0B0B", height: 360, padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 700, fontSize: 14, color: GOLD, margin: 0 }}>AugustoCS</p>
-                <div style={{ display: "flex", gap: 18 }}>
-                  {["Inicio", "Servicios", "Proyectos", "Contacto"].map((l, i) => (
-                    <p key={i} style={{ fontFamily: "'InterVar', system-ui", fontSize: 10, color: "rgba(255,255,255,0.22)", margin: 0 }}>{l}</p>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 800, fontSize: 24, color: "rgba(255,255,255,0.92)", margin: 0, lineHeight: 1.1 }}>Tu web. Tu marca.</p>
-                <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 400, fontSize: 14, color: "rgba(255,255,255,0.38)", margin: "8px 0 0" }}>Diseño profesional que genera resultados reales.</p>
-                <div style={{ display: "inline-flex", alignItems: "center", background: GOLD, borderRadius: 8, padding: "0 20px", height: 34, marginTop: 14 }}>
-                  <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 12, color: "#fff", margin: 0 }}>Quiero mi web →</p>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 12 }}>
-                {["Landing", "E-commerce", "Branding"].map((label, i) => (
-                  <div key={i} style={{ flex: 1, height: 80, background: "#161616", borderRadius: 10, border: "1px solid rgba(255,255,255,0.05)", padding: 12 }}>
-                    <div style={{ width: 24, height: 24, background: i === 0 ? "#B8973E22" : "#ffffff08", borderRadius: 6, marginBottom: 8 }} />
-                    <p style={{ fontFamily: "'InterVar', system-ui", fontWeight: 600, fontSize: 10, color: "rgba(255,255,255,0.5)", margin: 0 }}>{label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <p
-        style={{
-          fontFamily: "'InterVar', system-ui",
-          fontWeight: 400,
-          fontSize: 28,
-          color: INK,
-          opacity: labelOp,
-          letterSpacing: "0.06em",
-          marginTop: 56,
-          textAlign: "center",
-        }}
-      >
-        Diseño · Desarrollo · Conversión
-      </p>
-    </AbsoluteFill>
-  );
-};
-
-// ── Scene 6: Stats (120f) ─────────────────────────────────────
-const SceneStats: React.FC = () => {
-  const f = useCurrentFrame();
-  const count = Math.round(fi(f, 0, 50, 0, 12));
-  const numOp = fi(f, 0, 20, 0, 1);
-  const numScale = fi(f, 0, 50, 0.88, 1);
-  const l1Op = fi(f, 22, 42, 0, 1);
-  const divOp = fi(f, 40, 60, 0, 0.2);
-  const l2Op = fi(f, 55, 75, 0, 0.7);
-  const glowOp = glowPulse(f, fi(f, 0, 40, 0, 0.5), 0.08, 70);
-
-  return (
-    <AbsoluteFill
-      style={{
-        background: BG,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          width: 560,
-          height: 560,
-          background: "radial-gradient(circle, rgba(184,151,62,0.2) 0%, transparent 70%)",
-          opacity: glowOp,
-          filter: "blur(80px)",
-        }}
-      />
-      <p
-        style={{
-          fontFamily: "'InterVar', system-ui",
-          fontWeight: 800,
-          fontSize: 240,
-          color: GOLD,
-          margin: 0,
-          lineHeight: 1,
-          opacity: numOp,
-          letterSpacing: "-0.02em",
-          transform: `scale(${numScale})`,
-        }}
-      >
-        {count}
-      </p>
-      <p
-        style={{
-          fontFamily: "'InterVar', system-ui",
-          fontWeight: 400,
-          fontSize: 46,
-          color: INK,
-          margin: 0,
-          letterSpacing: "0.01em",
-          opacity: l1Op,
-          marginTop: -6,
-        }}
-      >
-        proyectos entregados
-      </p>
-      <div style={{ width: 60, height: 1, background: INK, opacity: divOp, margin: "24px 0" }} />
-      <p
-        style={{
-          fontFamily: "'InterVar', system-ui",
-          fontWeight: 400,
-          fontSize: 36,
-          color: INK,
-          margin: 0,
-          opacity: l2Op,
-          letterSpacing: "0.03em",
-        }}
-      >
-        0 compromisos rotos
-      </p>
-    </AbsoluteFill>
-  );
-};
-
-// ── Scene 7: CTA (90f) ────────────────────────────────────────
+// ── Scene 7: CTA ──────────────────────────────────────────────────────────────
 const SceneCTA: React.FC = () => {
   const f = useCurrentFrame();
-  const glowOp = glowPulse(f, fi(f, 0, 40, 0, 0.6), 0.08, 75);
+
+  const logoOp = fi(f, 0, 28, 0, 1);
+  const logoScale = fi(f, 0, 28, 0.88, 1);
+  const nameOp = fi(f, 22, 48, 0, 1);
+  const nameY = fi(f, 22, 48, 20, 0);
+  const subOp = fi(f, 34, 58, 0, 1);
+  const pillOp = fi(f, 50, 72, 0, 1);
+  const glowP = fi(f, 0, 60, 0, 1);
+  const glowPulse = 0.82 + Math.sin((f / 38) * Math.PI * 2) * 0.13;
 
   return (
     <AbsoluteFill
-      style={{
-        background: BG,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-        gap: 16,
-      }}
+      style={{ background: BG, alignItems: "center", justifyContent: "center" }}
     >
+      <AmbientGlow
+        intensity={glowP * glowPulse * 0.95}
+        size={600}
+        color={ra(0.22)}
+      />
+
       <div
         style={{
-          position: "absolute",
-          width: 700,
-          height: 500,
-          background: "radial-gradient(ellipse, rgba(184,151,62,0.18) 0%, transparent 65%)",
-          opacity: glowOp,
-          filter: "blur(70px)",
-        }}
-      />
-      <p
-        style={{
-          fontFamily: "'InterVar', system-ui",
-          fontWeight: 700,
-          fontSize: 96,
-          color: INK,
-          margin: 0,
-          letterSpacing: "-0.02em",
-          zIndex: 1,
-          ...blurReveal(f, 0, 28),
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 28,
         }}
       >
-        AugustoCS
-      </p>
-      <p
-        style={{
-          fontFamily: "'InterVar', system-ui",
-          fontWeight: 400,
-          fontSize: 40,
-          color: GOLD,
-          margin: 0,
-          letterSpacing: "0.04em",
-          zIndex: 1,
-          ...blurReveal(f, 20, 26),
-        }}
-      >
-        @AugustoCS.studio
-      </p>
-      <p
-        style={{
-          fontFamily: "'InterVar', system-ui",
-          fontWeight: 400,
-          fontSize: 28,
-          color: INK,
-          margin: "16px 0 0",
-          letterSpacing: "0.07em",
-          textTransform: "uppercase",
-          zIndex: 1,
-          ...blurReveal(f, 44, 24),
-          opacity: (blurReveal(f, 44, 24).opacity as number) * 0.5,
-        }}
-      >
-        DM para trabajar juntos
-      </p>
+        {/* Logo */}
+        <div
+          style={{
+            opacity: logoOp,
+            transform: `scale(${logoScale})`,
+          }}
+        >
+          <LogoMark size={130} />
+        </div>
+
+        {/* Name */}
+        <div
+          style={{
+            opacity: nameOp,
+            transform: `translateY(${nameY}px)`,
+            fontFamily: "'InterVar', Inter, sans-serif",
+            fontSize: 32,
+            fontWeight: 700,
+            color: CREAM,
+            letterSpacing: "-0.01em",
+          }}
+        >
+          AugustoCS.com
+        </div>
+
+        {/* Handle */}
+        <div
+          style={{
+            opacity: subOp,
+            fontFamily: "'InterVar', Inter, sans-serif",
+            fontSize: 17,
+            fontWeight: 300,
+            color: RUST,
+            letterSpacing: "0.06em",
+            marginTop: -12,
+          }}
+        >
+          @AugustoCS.studio
+        </div>
+
+        {/* Pill */}
+        <div
+          style={{
+            opacity: pillOp,
+            marginTop: 8,
+            padding: "13px 36px",
+            border: `1px solid ${ra(0.45)}`,
+            borderRadius: 100,
+            fontFamily: "'InterVar', Inter, sans-serif",
+            fontSize: 12,
+            fontWeight: 400,
+            color: RUST,
+            letterSpacing: "0.25em",
+            textTransform: "uppercase",
+          }}
+        >
+          Diseño Web · Shopify · Framer
+        </div>
+      </div>
     </AbsoluteFill>
   );
 };
 
-// ── Root — scenes + global overlays ──────────────────────────
+// ── Root composition ──────────────────────────────────────────────────────────
 export const Reel: React.FC = () => {
   const FADE = 15;
   const t = linearTiming({ durationInFrames: FADE });
@@ -1054,42 +840,63 @@ export const Reel: React.FC = () => {
   return (
     <AbsoluteFill>
       <TransitionSeries>
-        <TransitionSeries.Sequence durationInFrames={90}>
+        {/* 1 — Intro: 75f */}
+        <TransitionSeries.Sequence durationInFrames={75}>
           <SceneIntro />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-        <TransitionSeries.Sequence durationInFrames={180}>
+        {/* 2 — Hook: 105f */}
+        <TransitionSeries.Sequence durationInFrames={105}>
           <SceneHook />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-        <TransitionSeries.Sequence durationInFrames={270}>
-          <ScenePhone />
-        </TransitionSeries.Sequence>
-        <TransitionSeries.Transition timing={t} presentation={fade()} />
-
-        <TransitionSeries.Sequence durationInFrames={210}>
-          <SceneBrowser />
-        </TransitionSeries.Sequence>
-        <TransitionSeries.Transition timing={t} presentation={fade()} />
-
+        {/* 3 — Robot Energy (phone): 180f */}
         <TransitionSeries.Sequence durationInFrames={180}>
-          <SceneDouble />
+          <ScenePhone
+            imgSrc="projects/robotenergy.webp"
+            clientName="Robot Energy"
+            projectType="E-commerce Shopify"
+            totalFrames={180}
+          />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition timing={t} presentation={fade()} />
 
-        <TransitionSeries.Sequence durationInFrames={120}>
-          <SceneStats />
+        {/* 4 — Madre Superiora (laptop): 165f */}
+        <TransitionSeries.Sequence durationInFrames={165}>
+          <SceneLaptop
+            imgSrc="projects/madresuperiora.webp"
+            clientName="Madre Superiora"
+            projectType="Café de especialidad"
+            totalFrames={165}
+          />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition timing={t} presentation={fade()} />
 
+        {/* 5 — La Trattoria (phone): 150f */}
+        <TransitionSeries.Sequence durationInFrames={150}>
+          <ScenePhone
+            imgSrc="projects/latrattoria.webp"
+            clientName="La Trattoria"
+            projectType="Restaurante Italiano"
+            totalFrames={150}
+          />
+        </TransitionSeries.Sequence>
+        <TransitionSeries.Transition timing={t} presentation={fade()} />
+
+        {/* 6 — Stats + Ticker: 90f */}
+        <TransitionSeries.Sequence durationInFrames={90}>
+          <SceneTicker />
+        </TransitionSeries.Sequence>
+        <TransitionSeries.Transition timing={t} presentation={fade()} />
+
+        {/* 7 — CTA: 90f */}
         <TransitionSeries.Sequence durationInFrames={90}>
           <SceneCTA />
         </TransitionSeries.Sequence>
       </TransitionSeries>
 
-      {/* Global post-processing — over all scenes */}
       <Vignette />
       <GrainOverlay />
     </AbsoluteFill>
