@@ -1,7 +1,8 @@
 {
-  "name": "augusto-portfolio",
+  "name": "augustocs",
   "version": "0.1.0",
   "private": true,
+  "description": "AugustoCS — Creative content studio for Instagram reels and carousels",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
