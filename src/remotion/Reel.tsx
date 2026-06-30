@@ -7,15 +7,24 @@ import {
 } from "remotion";
 import { TransitionSeries, linearTiming } from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
-import { loadFont } from "@remotion/fonts";
-import { staticFile } from "remotion";
 
-loadFont({
-  family: "InterVar",
-  url: staticFile("fonts/Inter-variable.woff2"),
-  weight: "100 900",
-  style: "normal",
-});
+// Inject fonts for Next.js Player context (no staticFile available)
+if (typeof document !== "undefined") {
+  const id = "__augusto-reel-fonts";
+  if (!document.getElementById(id)) {
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = `
+      @font-face {
+        font-family: 'InterVar';
+        src: url('/fonts/Inter-variable.woff2') format('woff2');
+        font-weight: 100 900;
+        font-style: normal;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
 
 const BG = "#F0EFEB";
 const INK = "#1A1A1A";
@@ -30,12 +39,10 @@ function fi(f: number, from: number, to: number, a: number, b: number): number {
   });
 }
 
-// ── Scene 1: Brand intro (120f) ───────────────────────────────
 const SceneIntro: React.FC = () => {
   const f = useCurrentFrame();
   const op = fi(f, 0, 35, 0, 1);
   const ls = fi(f, 10, 80, 0.3, 0.52);
-
   return (
     <AbsoluteFill
       style={{
@@ -63,7 +70,6 @@ const SceneIntro: React.FC = () => {
   );
 };
 
-// ── Scene 2: Hook (180f) ──────────────────────────────────────
 const SceneHook: React.FC = () => {
   const f = useCurrentFrame();
   const glowOp = fi(f, 0, 70, 0, 1);
@@ -72,7 +78,6 @@ const SceneHook: React.FC = () => {
   const l2Op = fi(f, 28, 56, 0, 1);
   const l2Y = fi(f, 28, 56, 36, 0);
   const subOp = fi(f, 75, 105, 0, 0.55);
-
   return (
     <AbsoluteFill
       style={{
@@ -160,7 +165,6 @@ const SceneHook: React.FC = () => {
   );
 };
 
-// ── Phone screen content ──────────────────────────────────────
 const PhoneScreen: React.FC = () => (
   <div style={{ background: "#fff", width: "100%", height: "100%" }}>
     <div
@@ -321,7 +325,6 @@ const Phone: React.FC = () => (
   </div>
 );
 
-// ── Scene 3: Phone (210f) ─────────────────────────────────────
 const ScenePhone: React.FC = () => {
   const f = useCurrentFrame();
   const rotY = fi(f, 0, 75, -22, -5);
@@ -332,7 +335,6 @@ const ScenePhone: React.FC = () => {
   const glowOp = fi(f, 35, 100, 0, 0.85);
   const labelOp = fi(f, 80, 115, 0, 0.65);
   const floatY = f > 75 ? Math.sin(((f - 75) / 32) * Math.PI) * 11 : 0;
-
   return (
     <AbsoluteFill
       style={{
@@ -380,7 +382,6 @@ const ScenePhone: React.FC = () => {
   );
 };
 
-// ── Scene 4: Caption (120f) ───────────────────────────────────
 const SceneCaption: React.FC = () => {
   const f = useCurrentFrame();
   const l1Op = fi(f, 0, 22, 0, 1);
@@ -388,7 +389,6 @@ const SceneCaption: React.FC = () => {
   const l2Op = fi(f, 22, 44, 0, 1);
   const l2Y = fi(f, 22, 44, 28, 0);
   const subOp = fi(f, 58, 82, 0, 0.5);
-
   return (
     <AbsoluteFill
       style={{
@@ -449,7 +449,6 @@ const SceneCaption: React.FC = () => {
   );
 };
 
-// ── Browser mockup ────────────────────────────────────────────
 const Browser: React.FC = () => (
   <div
     style={{
@@ -601,7 +600,6 @@ const Browser: React.FC = () => (
   </div>
 );
 
-// ── Scene 5: Browser (180f) ───────────────────────────────────
 const SceneBrowser: React.FC = () => {
   const f = useCurrentFrame();
   const tx = fi(f, 0, 75, 260, 0);
@@ -611,7 +609,6 @@ const SceneBrowser: React.FC = () => {
   const glowOp = fi(f, 25, 85, 0, 0.75);
   const labelOp = fi(f, 90, 120, 0, 0.6);
   const floatY = f > 75 ? Math.sin(((f - 75) / 38) * Math.PI) * 9 : 0;
-
   return (
     <AbsoluteFill
       style={{
@@ -658,7 +655,6 @@ const SceneBrowser: React.FC = () => {
   );
 };
 
-// ── Scene 6: Stats (90f) ──────────────────────────────────────
 const SceneStats: React.FC = () => {
   const f = useCurrentFrame();
   const numOp = fi(f, 0, 22, 0, 1);
@@ -666,7 +662,6 @@ const SceneStats: React.FC = () => {
   const l1Op = fi(f, 18, 38, 0, 1);
   const divOp = fi(f, 32, 52, 0, 0.18);
   const l2Op = fi(f, 48, 68, 0, 0.68);
-
   return (
     <AbsoluteFill
       style={{
@@ -731,14 +726,12 @@ const SceneStats: React.FC = () => {
   );
 };
 
-// ── Scene 7: CTA (90f) ────────────────────────────────────────
 const SceneCTA: React.FC = () => {
   const f = useCurrentFrame();
   const nameOp = fi(f, 0, 28, 0, 1);
   const nameY = fi(f, 0, 28, 24, 0);
   const handleOp = fi(f, 22, 48, 0, 1);
   const dmOp = fi(f, 50, 72, 0, 0.5);
-
   return (
     <AbsoluteFill
       style={{
@@ -795,7 +788,6 @@ const SceneCTA: React.FC = () => {
   );
 };
 
-// ── Root (990f total) ─────────────────────────────────────────
 export const Reel: React.FC = () => {
   const FADE = 15;
   const t = linearTiming({ durationInFrames: FADE });
